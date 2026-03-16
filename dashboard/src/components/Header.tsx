@@ -1,69 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 
-const HERO_ART = [
-  '╔═══════════════════════════════════════════════════════════╗',
-  '║  ██╗  ██╗ ██████╗  ██████╗ ██╗  ██╗                     ║',
-  '║  ██║  ██║██╔═══██╗██╔═══██╗██║ ██╔╝                     ║',
-  '║  ███████║██║   ██║██║   ██║█████╔╝                      ║',
-  '║  ██╔══██║██║   ██║██║   ██║██╔═██╗                      ║',
-  '║  ██║  ██║╚██████╔╝╚██████╔╝██║  ██╗                     ║',
-  '║  ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝                     ║',
-  '║  ██╗  ██╗███████╗██████╗  ██████╗                        ║',
-  '║  ██║  ██║██╔════╝██╔══██╗██╔═══██╗                       ║',
-  '║  ███████║█████╗  ██████╔╝██║   ██║                       ║',
-  '║  ██╔══██║██╔══╝  ██╔══██╗██║   ██║                       ║',
-  '║  ██║  ██║███████╗██║  ██║╚██████╔╝                       ║',
-  '║  ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝                       ║',
-  '╚═══════════════════════════════════════════════════════════╝',
+const LOGO = [
+  ' ╦ ╦╔═╗╔═╗╦╔═  ╦ ╦╔═╗╦═╗╔═╗ ',
+  ' ╠═╣║ ║║ ║╠╩╗  ╠═╣║╣ ╠╦╝║ ║ ',
+  ' ╩ ╩╚═╝╚═╝╩ ╩  ╩ ╩╚═╝╩╚═╚═╝ ',
 ];
-
-// Compact pixel art for the header
-const PIXEL_HOOK = [
-  ' ⚔️  ░█░█░█▀█░█▀█░█░█░  ░█░█░█▀▀░█▀▄░█▀█░  ⚔️',
-  '     ░█▀█░█░█░█░█░█▀▄░  ░█▀█░█▀▀░█▀▄░█░█░    ',
-  '     ░▀░▀░▀▀▀░▀▀▀░▀░▀░  ░▀░▀░▀▀▀░▀░▀░▀▀▀░    ',
-];
-
-const SPARKLE_FRAMES = ['✦', '✧', '✦', '⋆', '✧', '⋆'];
-const SWORD_FRAMES = ['⚔️ ', '🗡️ ', '⚔️ ', '🛡️ '];
-
-const neonColors = [
-  '#ff0080', '#ff00ff', '#8000ff', '#0080ff',
-  '#00ffff', '#00ff80', '#80ff00', '#ffff00',
-] as const;
 
 export function Header({ mode }: { mode: 'live' | 'history' }) {
-  const [frame, setFrame] = useState(0);
-  const [colorOffset, setColorOffset] = useState(0);
+  const [pulse, setPulse] = useState(true);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setFrame(f => (f + 1) % SPARKLE_FRAMES.length);
-      setColorOffset(c => (c + 1) % neonColors.length);
-    }, 300);
+    const timer = setInterval(() => setPulse(p => !p), 800);
     return () => clearInterval(timer);
   }, []);
-
-  const sparkle = SPARKLE_FRAMES[frame];
 
   return (
     <Box flexDirection="column" alignItems="center" marginBottom={1}>
       <Box flexDirection="column" alignItems="center">
-        {PIXEL_HOOK.map((line, i) => (
-          <Text key={i} color={neonColors[(i + colorOffset) % neonColors.length]} bold>
-            {line}
-          </Text>
+        {LOGO.map((line, i) => (
+          <Text key={i} color="#888" bold>{line}</Text>
         ))}
       </Box>
-      <Box marginTop={0}>
-        <Text color="#555">{'─'.repeat(12)}</Text>
-        <Text color="#ff0080"> {sparkle} </Text>
-        <Text color="#00ffff" bold italic>
-          {mode === 'live' ? 'agent telemetry' : 'session replay'}
-        </Text>
-        <Text color="#ff0080"> {sparkle} </Text>
-        <Text color="#555">{'─'.repeat(12)}</Text>
+      <Box>
+        <Text color="#444">{'─'.repeat(8)} </Text>
+        {mode === 'live' ? (
+          <>
+            <Text color={pulse ? '#4ade80' : '#166534'}>●</Text>
+            <Text color="#666"> live telemetry </Text>
+          </>
+        ) : (
+          <>
+            <Text color="#60a5fa">◆</Text>
+            <Text color="#666"> session history </Text>
+          </>
+        )}
+        <Text color="#444">{'─'.repeat(8)}</Text>
       </Box>
     </Box>
   );

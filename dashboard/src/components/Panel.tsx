@@ -3,28 +3,22 @@ import { Box, Text } from 'ink';
 
 interface PanelProps {
   title: string;
-  icon: string;
-  color: string;
   children: React.ReactNode;
   width?: number | string;
 }
 
-export function Panel({ title, icon, color, children, width }: PanelProps) {
+export function Panel({ title, children, width }: PanelProps) {
   return (
     <Box
       flexDirection="column"
-      borderStyle="round"
-      borderColor={color}
+      borderStyle="single"
+      borderColor="#333"
       paddingX={1}
       paddingY={0}
       width={width}
     >
-      <Box>
-        <Text color={color} bold>
-          {icon} {title}
-        </Text>
-      </Box>
-      <Box flexDirection="column" marginTop={0}>
+      <Text color="#666" bold>{title}</Text>
+      <Box flexDirection="column">
         {children}
       </Box>
     </Box>
@@ -34,15 +28,16 @@ export function Panel({ title, icon, color, children, width }: PanelProps) {
 interface StatRowProps {
   label: string;
   value: string | number;
-  color?: string;
-  dimLabel?: boolean;
+  accent?: boolean;
+  warn?: boolean;
 }
 
-export function StatRow({ label, value, color = 'white', dimLabel = true }: StatRowProps) {
+export function StatRow({ label, value, accent = false, warn = false }: StatRowProps) {
+  const valueColor = warn ? '#ef4444' : accent ? '#e2e8f0' : '#94a3b8';
   return (
     <Box>
-      <Text color={dimLabel ? '#888' : 'white'}>{label}: </Text>
-      <Text color={color} bold>{typeof value === 'number' ? value.toLocaleString() : value}</Text>
+      <Text color="#555">{label.padEnd(14)}</Text>
+      <Text color={valueColor} bold={accent}>{typeof value === 'number' ? value.toLocaleString() : value}</Text>
     </Box>
   );
 }
@@ -52,24 +47,27 @@ interface ToolBarProps {
 }
 
 const TOOL_COLORS: Record<string, string> = {
-  Read: '#00ff80',
-  Glob: '#00ff80',
-  Grep: '#00ff80',
-  Edit: '#00bfff',
-  Write: '#00bfff',
-  Bash: '#ffff00',
-  Agent: '#ff00ff',
-  WebFetch: '#ff8000',
+  Read: '#94a3b8',
+  Glob: '#94a3b8',
+  Grep: '#94a3b8',
+  Edit: '#60a5fa',
+  Write: '#60a5fa',
+  Bash: '#fbbf24',
+  Agent: '#c084fc',
+  WebFetch: '#fb923c',
 };
 
 export function ToolBar({ tools }: ToolBarProps) {
-  const entries = Object.entries(tools).sort((a, b) => b[1] - a[1]);
+  const entries = Object.entries(tools).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  if (entries.length === 0) return <Text color="#444">—</Text>;
+
   return (
-    <Box flexWrap="wrap" gap={1}>
-      {entries.map(([name, count]) => (
-        <Box key={name}>
-          <Text color={TOOL_COLORS[name] || '#aaa'} bold>{name}</Text>
-          <Text color="#666">({count})</Text>
+    <Box flexWrap="wrap">
+      {entries.map(([name, count], i) => (
+        <Box key={name} marginRight={1}>
+          <Text color={TOOL_COLORS[name] || '#666'}>{name}</Text>
+          <Text color="#444"> {count}</Text>
+          {i < entries.length - 1 && <Text color="#333"> │</Text>}
         </Box>
       ))}
     </Box>

@@ -5,13 +5,8 @@ import { Panel, StatRow, ToolBar } from './Panel.js';
 import { EventStream } from './EventStream.js';
 import type { TelemetryState } from '../hooks/useTelemetry.js';
 
-const COST_COLOR = '#ffff00';
-const TOKEN_COLOR = '#00ffff';
-const TOOL_COLOR = '#00ff80';
-const AGENT_COLOR = '#ff00ff';
-const GIT_COLOR = '#ff8800';
-
 function formatCost(usd: number): string {
+  if (usd === 0) return '$0.00';
   return `$${usd.toFixed(2)}`;
 }
 
@@ -19,6 +14,14 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  if (m < 60) return `${m}m ${s}s`;
+  return `${Math.floor(m / 60)}h ${m % 60}m`;
 }
 
 interface DashboardProps {
@@ -30,79 +33,56 @@ interface DashboardProps {
 export function Dashboard({ data, mode, date }: DashboardProps) {
   const { stdout } = useStdout();
   const termWidth = stdout?.columns || 80;
-  const halfWidth = Math.floor((termWidth - 4) / 2);
+  const halfWidth = Math.floor((termWidth - 2) / 2);
 
-  const [uptime, setUptime] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     if (mode !== 'live') return;
-    const timer = setInterval(() => setUptime(u => u + 1), 1000);
+    const timer = setInterval(() => setElapsed(e => e + 1), 1000);
     return () => clearInterval(timer);
   }, [mode]);
 
-  const uptimeStr = mode === 'live'
-    ? `${Math.floor(uptime / 60)}m ${uptime % 60}s`
-    : undefined;
+  const activeStreams = data.streams.filter(s => s.active).length;
 
   return (
     <Box flexDirection="column">
       <Header mode={mode} />
 
-      {/* Status bar */}
-      <Box justifyContent="center" marginBottom={0}>
-        <Text color="#333">{'─'.repeat(4)} </Text>
-        {mode === 'live' ? (
-          <>
-            <Text color="#00ff00">● LIVE</Text>
-            <Text color="#555"> · watching · </Text>
-            <Text color="#888">{uptimeStr}</Text>
-          </>
-        ) : (
-          <>
-            <Text color="#00bfff">◆ HISTORY</Text>
-            <Text color="#555"> · </Text>
-            <Text color="#888">{date || 'today'}</Text>
-          </>
-        )}
-        <Text color="#333"> {'─'.repeat(4)}</Text>
-      </Box>
-
-      {/* Top row: Session + Tools */}
+      {/* Top stats row */}
       <Box>
-        <Panel title="Session" icon="⏱" color="#00ffff" width={halfWidth}>
-          <StatRow label="Sessions" value={data.totalSessions} color={TOKEN_COLOR} />
-          <StatRow label="Channels" value={data.channels.join(', ') || '—'} color="#888" />
-          <StatRow label="Repos" value={data.repos.join(', ') || '—'} color="#888" />
-          {mode === 'live' && data.streams.filter(s => s.active).length > 0 && (
-            <StatRow
-              label="Active"
-              value={`${data.streams.filter(s => s.active).length} streams`}
-              color="#00ff00"
-            />
+        <Panel title="session" width={halfWidth}>
+          <StatRow label="sessions" value={data.totalSessions} accent />
+          <StatRow label="channels" value={data.channels.join(', ') || '—'} />
+          <StatRow label="repos" value={data.repos.length > 0 ? data.repos.join(', ') : '—'} />
+          {mode === 'live' && activeStreams > 0 && (
+            <StatRow label="active" value={`${activeStreams} stream${activeStreams > 1 ? 's' : ''}`} accent />
+          )}
+          {mode === 'live' && (
+            <StatRow label="uptime" value={formatDuration(elapsed)} />
           )}
         </Panel>
-        <Panel title="Tools" icon="🔧" color={TOOL_COLOR} width={halfWidth}>
-          <StatRow label="Total calls" value={data.totalTools} color={TOOL_COLOR} />
-          <StatRow label="Failures" value={data.totalFailures} color={data.totalFailures > 0 ? '#ff3333' : '#555'} />
+        <Panel title="tools" width={halfWidth}>
+          <StatRow label="total calls" value={data.totalTools} accent />
+          <StatRow label="failures" value={data.totalFailures} warn={data.totalFailures > 0} />
           <ToolBar tools={data.toolCounts} />
         </Panel>
       </Box>
 
-      {/* Bottom row: Tokens + Agents */}
+      {/* Bottom stats row */}
       <Box>
-        <Panel title="Tokens & Cost" icon="💰" color={COST_COLOR} width={halfWidth}>
-          <StatRow label="Total tokens" value={formatTokens(data.totalTokens)} color={TOKEN_COLOR} />
-          <StatRow label="Est. cost" value={formatCost(data.totalCost)} color={COST_COLOR} />
+        <Panel title="tokens" width={halfWidth}>
+          <StatRow label="total" value={formatTokens(data.totalTokens)} accent />
+          <StatRow label="est. cost" value={formatCost(data.totalCost)} accent />
         </Panel>
-        <Panel title="Agents" icon="🤖" color={AGENT_COLOR} width={halfWidth}>
+        <Panel title="agents" width={halfWidth}>
           <StatRow
-            label="Subagents"
+            label="spawned"
             value={data.streams.filter(s => s.type === 'subagent').length}
-            color={AGENT_COLOR}
           />
           <StatRow
-            label="Active"
+            label="active"
             value={data.streams.filter(s => s.type === 'subagent' && s.active).length}
-            color="#00ff00"
+            accent={data.streams.some(s => s.type === 'subagent' && s.active)}
           />
         </Panel>
       </Box>
@@ -111,12 +91,10 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
       <EventStream streams={data.streams} width={termWidth - 6} />
 
       {/* Footer */}
-      <Box justifyContent="center" marginTop={0}>
-        <Text color="#333">{'─'.repeat(8)} </Text>
-        <Text color="#555" italic>hook-hero</Text>
-        <Text color="#333"> · </Text>
-        <Text color="#555" italic>q to quit</Text>
-        <Text color="#333"> {'─'.repeat(8)}</Text>
+      <Box justifyContent="center">
+        <Text color="#333">
+          {'─'.repeat(6)} hook-hero{mode === 'live' ? ' · ctrl+c to quit' : ''} {'─'.repeat(6)}
+        </Text>
       </Box>
     </Box>
   );
