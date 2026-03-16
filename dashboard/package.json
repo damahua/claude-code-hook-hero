@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Real-time terminal dashboard for Hook-Hero agent telemetry",
   "bin": {
-    "hook-hero": "./bin/hook-hero-dash.mjs"
+    "hook-hero": "./bin/hook-hero-dash.mjs",
+    "hook-hero-demo": "./bin/hook-hero-demo.mjs"
   },
   "scripts": {
     "dev": "tsx src/cli.tsx",
