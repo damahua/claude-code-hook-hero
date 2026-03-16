@@ -1,0 +1,302 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/amplitude/hook-hero/config/schema.json",
+  "title": "Hook Hero Session Summary",
+  "description": "Schema for session summary files written to ~/.claude/hook-hero/sessions/{date}/{id}.json",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "session_id",
+    "channel",
+    "timing",
+    "context",
+    "tools",
+    "tokens",
+    "git",
+    "prompts",
+    "subagents",
+    "compactions",
+    "worktrees",
+    "tasks"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0",
+      "description": "Schema version for forward-compatibility checks"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Unique identifier for the Claude session"
+    },
+    "channel": {
+      "type": "string",
+      "enum": ["claude-code", "claude-cli"],
+      "description": "The Claude interface that initiated the session"
+    },
+    "timing": {
+      "type": "object",
+      "required": ["start_time", "end_time", "duration_seconds"],
+      "additionalProperties": false,
+      "properties": {
+        "start_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the session started"
+        },
+        "end_time": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the session ended"
+        },
+        "duration_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total session duration in seconds"
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "required": [
+        "project_path",
+        "project_name",
+        "directory",
+        "cwd",
+        "repo",
+        "git_remote_url",
+        "git_branch",
+        "model"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "project_path": {
+          "type": ["string", "null"],
+          "description": "Absolute path to the project root"
+        },
+        "project_name": {
+          "type": ["string", "null"],
+          "description": "Name of the project (basename of project_path)"
+        },
+        "directory": {
+          "type": ["string", "null"],
+          "description": "Relative directory within the project"
+        },
+        "cwd": {
+          "type": ["string", "null"],
+          "description": "Absolute current working directory at session start"
+        },
+        "repo": {
+          "type": ["string", "null"],
+          "description": "Repository slug in owner/name format"
+        },
+        "git_remote_url": {
+          "type": ["string", "null"],
+          "description": "Git remote URL for the repository"
+        },
+        "git_branch": {
+          "type": ["string", "null"],
+          "description": "Active git branch at session start"
+        },
+        "model": {
+          "type": ["string", "null"],
+          "description": "Claude model identifier used in this session"
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "required": ["total_calls", "by_type", "failures"],
+      "additionalProperties": false,
+      "properties": {
+        "total_calls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of tool invocations during the session"
+        },
+        "by_type": {
+          "type": "object",
+          "description": "Map of tool name to invocation count",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "failures": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tool invocations that resulted in an error"
+        }
+      }
+    },
+    "tokens": {
+      "type": "object",
+      "required": [
+        "input",
+        "output",
+        "total",
+        "cache_read",
+        "cache_write",
+        "estimated_cost_usd"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total input tokens consumed"
+        },
+        "output": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total output tokens generated"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total tokens (input + output)"
+        },
+        "cache_read": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tokens served from the prompt cache"
+        },
+        "cache_write": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tokens written to the prompt cache"
+        },
+        "estimated_cost_usd": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Estimated cost in USD, or null if unavailable"
+        }
+      }
+    },
+    "git": {
+      "type": "object",
+      "required": [
+        "commits_made",
+        "branches_touched",
+        "files_changed",
+        "insertions",
+        "deletions",
+        "prs_created"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "commits_made": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of git commits made during the session"
+        },
+        "branches_touched": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of branch names that were checked out or created"
+        },
+        "files_changed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of files changed across all commits"
+        },
+        "insertions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total lines inserted across all commits"
+        },
+        "deletions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total lines deleted across all commits"
+        },
+        "prs_created": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of pull requests created during the session"
+        }
+      }
+    },
+    "prompts": {
+      "type": "object",
+      "required": ["count"],
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of user prompts submitted during the session"
+        }
+      }
+    },
+    "subagents": {
+      "type": "object",
+      "required": ["total_spawned", "by_type", "total_duration_ms"],
+      "additionalProperties": false,
+      "properties": {
+        "total_spawned": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of subagents spawned during the session"
+        },
+        "by_type": {
+          "type": "object",
+          "description": "Map of subagent type to spawn count",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "total_duration_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total wall-clock time spent in subagents in milliseconds"
+        }
+      }
+    },
+    "compactions": {
+      "type": "object",
+      "required": ["count"],
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of context compaction events during the session"
+        }
+      }
+    },
+    "worktrees": {
+      "type": "object",
+      "required": ["created", "removed"],
+      "additionalProperties": false,
+      "properties": {
+        "created": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of git worktrees created during the session"
+        },
+        "removed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of git worktrees removed during the session"
+        }
+      }
+    },
+    "tasks": {
+      "type": "object",
+      "required": ["completed"],
+      "additionalProperties": false,
+      "properties": {
+        "completed": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tasks marked completed during the session"
+        }
+      }
+    }
+  }
+}
