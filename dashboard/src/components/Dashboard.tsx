@@ -6,7 +6,6 @@ import { EventStream } from './EventStream.js';
 import type { TelemetryState } from '../hooks/useTelemetry.js';
 
 function formatCost(usd: number): string {
-  if (usd === 0) return '$0.00';
   return `$${usd.toFixed(2)}`;
 }
 
@@ -16,12 +15,10 @@ function formatTokens(n: number): string {
   return String(n);
 }
 
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`;
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  if (m < 60) return `${m}m ${s}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+function formatUptime(s: number): string {
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m${s % 60}s`;
 }
 
 interface DashboardProps {
@@ -43,47 +40,36 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   }, [mode]);
 
   const activeStreams = data.streams.filter(s => s.active).length;
+  const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
 
   return (
     <Box flexDirection="column">
       <Header mode={mode} />
 
-      {/* Top stats row */}
+      {/* Timestamp bar */}
       <Box>
-        <Panel title="session" width={halfWidth}>
-          <StatRow label="sessions" value={data.totalSessions} accent />
-          <StatRow label="channels" value={data.channels.join(', ') || '—'} />
-          <StatRow label="repos" value={data.repos.length > 0 ? data.repos.join(', ') : '—'} />
-          {mode === 'live' && activeStreams > 0 && (
-            <StatRow label="active" value={`${activeStreams} stream${activeStreams > 1 ? 's' : ''}`} accent />
-          )}
-          {mode === 'live' && (
-            <StatRow label="uptime" value={formatDuration(elapsed)} />
-          )}
-        </Panel>
-        <Panel title="tools" width={halfWidth}>
-          <StatRow label="total calls" value={data.totalTools} accent />
-          <StatRow label="failures" value={data.totalFailures} warn={data.totalFailures > 0} />
-          <ToolBar tools={data.toolCounts} />
-        </Panel>
+        <Text color="#050">[{ts}] </Text>
+        <Text color="#070">uptime:</Text>
+        <Text color="#0a0">{formatUptime(elapsed)} </Text>
+        <Text color="#070">active:</Text>
+        <Text color={activeStreams > 0 ? '#0f0' : '#050'}>{activeStreams} </Text>
+        <Text color="#070">sessions:</Text>
+        <Text color="#0a0">{data.totalSessions}</Text>
       </Box>
 
-      {/* Bottom stats row */}
+      {/* Stats panels */}
       <Box>
-        <Panel title="tokens" width={halfWidth}>
-          <StatRow label="total" value={formatTokens(data.totalTokens)} accent />
-          <StatRow label="est. cost" value={formatCost(data.totalCost)} accent />
+        <Panel title="sys" width={halfWidth}>
+          <StatRow label="channels" value={data.channels.join(',') || 'none'} />
+          <StatRow label="repos" value={data.repos.length > 0 ? data.repos.join(',') : 'none'} />
+          <StatRow label="tokens" value={formatTokens(data.totalTokens)} highlight />
+          <StatRow label="cost" value={formatCost(data.totalCost)} highlight />
         </Panel>
-        <Panel title="agents" width={halfWidth}>
-          <StatRow
-            label="spawned"
-            value={data.streams.filter(s => s.type === 'subagent').length}
-          />
-          <StatRow
-            label="active"
-            value={data.streams.filter(s => s.type === 'subagent' && s.active).length}
-            accent={data.streams.some(s => s.type === 'subagent' && s.active)}
-          />
+        <Panel title="ops" width={halfWidth}>
+          <StatRow label="tool_calls" value={data.totalTools} highlight />
+          <StatRow label="failures" value={data.totalFailures} warn={data.totalFailures > 0} />
+          <StatRow label="subagents" value={data.streams.filter(s => s.type === 'subagent').length} />
+          <ToolBar tools={data.toolCounts} />
         </Panel>
       </Box>
 
@@ -91,10 +77,11 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
       <EventStream streams={data.streams} width={termWidth - 6} />
 
       {/* Footer */}
-      <Box justifyContent="center">
-        <Text color="#333">
-          {'─'.repeat(6)} hook-hero{mode === 'live' ? ' · ctrl+c to quit' : ''} {'─'.repeat(6)}
-        </Text>
+      <Box>
+        <Text color="#030">{'─'.repeat(termWidth - 2)}</Text>
+      </Box>
+      <Box>
+        <Text color="#050">hook-hero v1.0 | ctrl+c quit | ~/.claude/hook-hero/</Text>
       </Box>
     </Box>
   );

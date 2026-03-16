@@ -12,12 +12,12 @@ export function Panel({ title, children, width }: PanelProps) {
     <Box
       flexDirection="column"
       borderStyle="single"
-      borderColor="#333"
+      borderColor="#070"
       paddingX={1}
       paddingY={0}
       width={width}
     >
-      <Text color="#666" bold>{title}</Text>
+      <Text color="#0a0" bold>[{title}]</Text>
       <Box flexDirection="column">
         {children}
       </Box>
@@ -28,16 +28,18 @@ export function Panel({ title, children, width }: PanelProps) {
 interface StatRowProps {
   label: string;
   value: string | number;
-  accent?: boolean;
+  highlight?: boolean;
   warn?: boolean;
 }
 
-export function StatRow({ label, value, accent = false, warn = false }: StatRowProps) {
-  const valueColor = warn ? '#ef4444' : accent ? '#e2e8f0' : '#94a3b8';
+export function StatRow({ label, value, highlight = false, warn = false }: StatRowProps) {
+  const valColor = warn ? '#f00' : highlight ? '#0f0' : '#0a0';
   return (
     <Box>
-      <Text color="#555">{label.padEnd(14)}</Text>
-      <Text color={valueColor} bold={accent}>{typeof value === 'number' ? value.toLocaleString() : value}</Text>
+      <Text color="#050">{label.padEnd(14)}</Text>
+      <Text color={valColor} bold={highlight}>
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </Text>
     </Box>
   );
 }
@@ -46,28 +48,18 @@ interface ToolBarProps {
   tools: Record<string, number>;
 }
 
-const TOOL_COLORS: Record<string, string> = {
-  Read: '#94a3b8',
-  Glob: '#94a3b8',
-  Grep: '#94a3b8',
-  Edit: '#60a5fa',
-  Write: '#60a5fa',
-  Bash: '#fbbf24',
-  Agent: '#c084fc',
-  WebFetch: '#fb923c',
-};
-
 export function ToolBar({ tools }: ToolBarProps) {
   const entries = Object.entries(tools).sort((a, b) => b[1] - a[1]).slice(0, 8);
-  if (entries.length === 0) return <Text color="#444">—</Text>;
+  if (entries.length === 0) return <Text color="#050">nil</Text>;
 
   return (
     <Box flexWrap="wrap">
       {entries.map(([name, count], i) => (
         <Box key={name} marginRight={1}>
-          <Text color={TOOL_COLORS[name] || '#666'}>{name}</Text>
-          <Text color="#444"> {count}</Text>
-          {i < entries.length - 1 && <Text color="#333"> │</Text>}
+          <Text color="#0a0">{name}</Text>
+          <Text color="#050">:</Text>
+          <Text color="#0f0">{count}</Text>
+          {i < entries.length - 1 && <Text color="#040"> | </Text>}
         </Box>
       ))}
     </Box>
