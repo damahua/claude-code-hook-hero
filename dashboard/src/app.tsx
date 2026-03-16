@@ -9,13 +9,12 @@ interface AppProps {
   baseDir?: string;
 }
 
-function KeyHandler() {
-  const { isRawModeSupported } = useStdin();
+function QuitHandler() {
   useInput((input, key) => {
     if (input === 'q' || (key.ctrl && input === 'c')) {
       process.exit(0);
     }
-  }, { isActive: isRawModeSupported });
+  });
   return null;
 }
 
@@ -24,10 +23,11 @@ export function App({ mode, date, baseDir }: AppProps) {
   const historyData = useHistoryTelemetry(mode === 'history' ? baseDir : undefined, date);
 
   const data = mode === 'live' ? liveData : historyData;
+  const hasTTY = process.stdin.isTTY === true;
 
   return (
     <>
-      <KeyHandler />
+      {hasTTY && <QuitHandler />}
       <Dashboard data={data} mode={mode} date={date} />
     </>
   );
