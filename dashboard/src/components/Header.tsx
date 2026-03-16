@@ -2,47 +2,40 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 
 const LOGO = [
-  '  _  _         _      _  _                 ',
-  ' | || |___  __|| |_   | || |___ _ _ ___    ',
-  ' | __ / _ \\/ _ | / /   | __ / -_) \'_/ _ \\ ',
-  ' |_||_\\___/\\___/_\\_\\   |_||_\\___|_| \\___/  ',
+  ' ╦ ╦╔═╗╔═╗╦╔═  ╦ ╦╔═╗╦═╗╔═╗ ',
+  ' ╠═╣║ ║║ ║╠╩╗  ╠═╣║╣ ╠╦╝║ ║ ',
+  ' ╩ ╩╚═╝╚═╝╩ ╩  ╩ ╩╚═╝╩╚═╚═╝ ',
 ];
 
 export function Header({ mode }: { mode: 'live' | 'history' }) {
-  const [blink, setBlink] = useState(true);
+  const [pulse, setPulse] = useState(true);
 
   useEffect(() => {
-    const timer = setInterval(() => setBlink(b => !b), 500);
+    const timer = setInterval(() => setPulse(p => !p), 800);
     return () => clearInterval(timer);
   }, []);
 
-  const cursor = blink ? '█' : ' ';
-
   return (
-    <Box flexDirection="column" marginBottom={1}>
-      <Box flexDirection="column">
+    <Box flexDirection="column" alignItems="center" marginBottom={1}>
+      <Box flexDirection="column" alignItems="center">
         {LOGO.map((line, i) => (
-          <Text key={i} color="#0f0">{line}</Text>
+          <Text key={i} color="#e2e8f0">{line}</Text>
         ))}
       </Box>
       <Box>
-        <Text color="#0a0">{'>'} </Text>
+        <Text color="#334155">{'─'.repeat(8)} </Text>
         {mode === 'live' ? (
           <>
-            <Text color="#0f0">agent_telemetry</Text>
-            <Text color="#070"> --mode </Text>
-            <Text color="#0f0">live</Text>
-            <Text color="#070"> --watch</Text>
+            <Text color={pulse ? '#22c55e' : '#15803d'}>●</Text>
+            <Text color="#94a3b8"> live telemetry </Text>
           </>
         ) : (
           <>
-            <Text color="#0f0">agent_telemetry</Text>
-            <Text color="#070"> --mode </Text>
-            <Text color="#0f0">history</Text>
-            <Text color="#070"> --replay</Text>
+            <Text color="#3b82f6">◆</Text>
+            <Text color="#94a3b8"> session history </Text>
           </>
         )}
-        <Text color="#0f0">{cursor}</Text>
+        <Text color="#334155">{'─'.repeat(8)}</Text>
       </Box>
     </Box>
   );

@@ -25,23 +25,13 @@ interface AgentStream {
   failures: number;
 }
 
-function getBlockChar(event: StreamEvent): string {
-  if (event.event === 'tool_failure') return '!';
-  if (event.event === 'user_prompt') return '>';
-  if (event.event === 'agent_stop') return '*';
-  if (event.event === 'compact_start') return '#';
-  if (event.event.startsWith('subagent')) return '@';
-  if (event.event === 'tool_start') return '█';
-  if (event.event === 'tool_end') return '▓';
-  return '░';
-}
-
 function getBlockColor(event: StreamEvent): string {
-  if (event.event === 'tool_failure') return '#f00';
-  if (event.event === 'user_prompt') return '#0f0';
-  if (event.event === 'agent_stop') return '#0ff';
-  if (event.event.startsWith('subagent')) return '#f0f';
-  return '#0a0';
+  if (event.event === 'tool_failure') return '#ef4444';
+  if (event.event === 'user_prompt') return '#e2e8f0';
+  if (event.event === 'agent_stop') return '#3b82f6';
+  if (event.event === 'compact_start' || event.event === 'compact_end') return '#f59e0b';
+  if (event.event.startsWith('subagent')) return '#a78bfa';
+  return '#94a3b8';
 }
 
 function formatDuration(ms: number): string {
@@ -49,12 +39,12 @@ function formatDuration(ms: number): string {
   if (s < 60) return `${s}s`;
   const m = Math.floor(s / 60);
   const rem = s % 60;
-  if (m < 60) return `${m}m${rem > 0 ? `${rem}s` : ''}`;
+  if (m < 60) return `${m}m${rem > 0 ? ` ${rem}s` : ''}`;
   const h = Math.floor(m / 60);
-  return `${h}h${m % 60}m`;
+  return `${h}h ${m % 60}m`;
 }
 
-const ACTIVITY = ['⣾', '⣽', '⣻', '⢿', '⡿', '⣟', '⣯', '⣷'];
+const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 interface StreamRowProps {
   stream: AgentStream;
@@ -66,17 +56,14 @@ function StreamRow({ stream, maxWidth }: StreamRowProps) {
 
   useEffect(() => {
     if (!stream.active) return;
-    const timer = setInterval(() => setFrame(f => (f + 1) % ACTIVITY.length), 80);
+    const timer = setInterval(() => setFrame(f => (f + 1) % SPINNER.length), 80);
     return () => clearInterval(timer);
   }, [stream.active]);
 
   const elapsed = (stream.endTime || Date.now()) - stream.startTime;
-  const pid = stream.id.slice(0, 6);
+  const statusIcon = stream.done ? '✓' : SPINNER[frame];
+  const statusColor = stream.done ? '#22c55e' : '#3b82f6';
 
-  const statusIcon = stream.done ? '+' : ACTIVITY[frame];
-  const statusColor = stream.done ? '#050' : '#0f0';
-
-  // Event bar
   const barWidth = Math.max(10, maxWidth - 4);
   const recentEvents = stream.events.slice(-barWidth);
   const paddingCount = Math.max(0, barWidth - recentEvents.length);
@@ -89,34 +76,45 @@ function StreamRow({ stream, maxWidth }: StreamRowProps) {
   return (
     <Box flexDirection="column">
       <Box>
-        <Text color={statusColor}>[{statusIcon}] </Text>
-        <Text color="#050">pid:</Text>
-        <Text color="#0a0">{pid} </Text>
-        <Text color="#0a0">{stream.label}</Text>
-        <Text color="#040"> {formatDuration(elapsed)}</Text>
-        {totalTools > 0 && <Text color="#040"> {totalTools}ops</Text>}
-        {stream.failures > 0 && <Text color="#f00"> {stream.failures}err</Text>}
-        {stream.done && <Text color="#050"> [done]</Text>}
+        <Text color={statusColor}>{statusIcon} </Text>
+        <Text color={stream.active ? '#e2e8f0' : '#94a3b8'} bold={stream.active}>
+          {stream.label}
+        </Text>
+        <Text color="#475569"> · </Text>
+        <Text color="#94a3b8">{formatDuration(elapsed)}</Text>
+        {totalTools > 0 && (
+          <>
+            <Text color="#475569"> · </Text>
+            <Text color="#94a3b8">{totalTools} calls</Text>
+          </>
+        )}
+        {stream.failures > 0 && (
+          <>
+            <Text color="#475569"> · </Text>
+            <Text color="#ef4444">{stream.failures} failed</Text>
+          </>
+        )}
       </Box>
 
       <Box>
-        <Text>{'    '}</Text>
-        <Text color="#020">{'·'.repeat(paddingCount)}</Text>
+        <Text>{'  '}</Text>
+        <Text color="#1e293b">{'░'.repeat(paddingCount)}</Text>
         {recentEvents.map((ev, i) => (
-          <Text key={i} color={getBlockColor(ev)}>{getBlockChar(ev)}</Text>
+          <Text key={i} color={getBlockColor(ev)}>
+            {ev.event === 'tool_failure' ? '█' : '▓'}
+          </Text>
         ))}
-        {stream.active && <Text color="#0f0">{'▌'}</Text>}
+        {stream.active && <Text color="#3b82f6">▏</Text>}
       </Box>
 
       {toolEntries.length > 0 && (
         <Box>
-          <Text>{'    '}</Text>
+          <Text>{'  '}</Text>
           {toolEntries.map(([name, count], i) => (
             <React.Fragment key={name}>
-              {i > 0 && <Text color="#030"> </Text>}
-              <Text color="#050">{name}</Text>
-              <Text color="#030">=</Text>
-              <Text color="#0a0">{count}</Text>
+              {i > 0 && <Text color="#334155"> · </Text>}
+              <Text color="#64748b">{name}</Text>
+              <Text color="#475569"> {count}</Text>
             </React.Fragment>
           ))}
         </Box>
@@ -134,14 +132,14 @@ export function EventStream({ streams, width = 55 }: EventStreamProps) {
   return (
     <Box
       borderStyle="single"
-      borderColor="#070"
+      borderColor="#334155"
       paddingX={1}
       flexDirection="column"
     >
-      <Text color="#0a0" bold>[streams]</Text>
+      <Text color="#94a3b8" bold>streams</Text>
       {streams.length === 0 ? (
         <Box justifyContent="center" paddingY={1}>
-          <Text color="#050">{'>'} listening on ~/.claude/hook-hero/ ...</Text>
+          <Text color="#475569" italic>waiting for activity...</Text>
         </Box>
       ) : (
         <Box flexDirection="column">
