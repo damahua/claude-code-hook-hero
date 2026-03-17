@@ -146,17 +146,25 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
       stream.idle = now - lastEventTime > IDLE_THRESHOLD_MS;
     }
 
-    // Read token data from buffer for active sessions (most up-to-date)
+    // Read buffer for active sessions — tokens + fill missing project name
     if (hasBuffer) {
       try {
         const bufferPath = path.join(DEFAULT_BASE, 'buffer', `${id}.json`);
         const buf = JSON.parse(fs.readFileSync(bufferPath, 'utf-8'));
+
+        // Tokens
         const ti = buf.tokens_input ?? 0;
         const to = buf.tokens_output ?? 0;
         const cr = buf.tokens_cache_read ?? 0;
         const cw = buf.tokens_cache_write ?? 0;
         if (ti > 0 || to > 0 || cr > 0 || cw > 0) {
           stream.tokens = { input: ti, output: to, cache_read: cr, cache_write: cw };
+        }
+
+        // Fill missing project name from buffer context
+        const bufProject = buf.context?.project_name;
+        if (bufProject && !stream.label.includes('[')) {
+          stream.label = stream.label + ` [${bufProject}]`;
         }
       } catch { /* ignore read errors */ }
     }
@@ -252,6 +260,16 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
           toolCounts[tool] = (toolCounts[tool] || 0) + count;
         }
         totalFailures += stream.failures;
+        if (stream.tokens) {
+          totalTokens += stream.tokens.input + stream.tokens.output;
+          // Estimate cost using opus rates as default (most common model)
+          const t = stream.tokens;
+          totalCost +=
+            (t.input / 1000) * 0.015 +
+            (t.output / 1000) * 0.075 +
+            (t.cache_read / 1000) * 0.00375 +
+            (t.cache_write / 1000) * 0.01875;
+        }
       }
     }
 

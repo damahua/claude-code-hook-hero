@@ -7,6 +7,12 @@ function formatTime(ts: string): string {
   return new Date(ts).toLocaleTimeString('en-US', { hour12: false });
 }
 
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
+
 function formatDuration(ms: number): string {
   const s = Math.floor(ms / 1000);
   if (s < 60) return `${s}s`;
@@ -88,7 +94,31 @@ export function StreamDetail({ stream, width, height, scrollOffset }: StreamDeta
             <Text color="#f85149" bold>{stream.failures}</Text>
           </>
         )}
+        {stream.tokens && (stream.tokens.input > 0 || stream.tokens.output > 0) && (
+          <>
+            <Text color="#484f58"> │ </Text>
+            <Text color="#6e7681">tok </Text>
+            <Text color="#d29922" bold>{formatTokenCount(stream.tokens.input + stream.tokens.output)}</Text>
+          </>
+        )}
       </Box>
+
+      {/* Token breakdown */}
+      {stream.tokens && (stream.tokens.input > 0 || stream.tokens.output > 0) && (
+        <Box paddingLeft={2}>
+          <Text color="#6e7681">input </Text>
+          <Text color="#c9d1d9">{formatTokenCount(stream.tokens.input)}</Text>
+          <Text color="#30363d"> · </Text>
+          <Text color="#6e7681">output </Text>
+          <Text color="#c9d1d9">{formatTokenCount(stream.tokens.output)}</Text>
+          <Text color="#30363d"> · </Text>
+          <Text color="#6e7681">cache read </Text>
+          <Text color="#c9d1d9">{formatTokenCount(stream.tokens.cache_read)}</Text>
+          <Text color="#30363d"> · </Text>
+          <Text color="#6e7681">cache write </Text>
+          <Text color="#c9d1d9">{formatTokenCount(stream.tokens.cache_write)}</Text>
+        </Box>
+      )}
 
       {/* Tool breakdown */}
       {toolEntries.length > 0 && (

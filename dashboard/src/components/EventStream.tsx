@@ -150,7 +150,7 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
         {stream.tokens && (stream.tokens.input > 0 || stream.tokens.output > 0) && (
           <>
             <Text color="#484f58"> · </Text>
-            <Text color="#d29922">{formatTokens(stream.tokens.input + stream.tokens.output + stream.tokens.cache_read)}</Text>
+            <Text color="#d29922">{formatTokens(stream.tokens.input + stream.tokens.output)}</Text>
             <Text color="#6e7681"> tok</Text>
           </>
         )}
