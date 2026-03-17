@@ -162,48 +162,53 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
       }
     } else {
       // Stream-level navigation (inside an expanded group)
-      const curIdx = selectedId ? current.findIndex(s => s.id === selectedId) : 0;
-      const safeIdx = curIdx === -1 ? 0 : curIdx;
+      // Only navigate within the current group's streams
+      const currentGroupStreams = current.filter(s => {
+        const m = s.label.match(/\[([^\]]+)\]/);
+        return (m ? m[1] : 'unknown') === selectedGroup;
+      });
+      const groupIdx = selectedId ? currentGroupStreams.findIndex(s => s.id === selectedId) : 0;
+      const safeIdx = groupIdx === -1 ? 0 : groupIdx;
 
       if (key.upArrow || input === 'k') {
         if (safeIdx === 0) {
-          // At top of list — go back to group level
+          // At top of group — go back to group level
           setSelectedId(null);
         } else {
-          const newIdx = safeIdx - 1;
-          const newStream = current[newIdx];
-          if (newStream) {
-            // Check if crossing into a collapsed group
-            const newProj = newStream.label.match(/\[([^\]]+)\]/)?.[1] ?? 'unknown';
-            if (collapsedGroups?.has(newProj)) {
-              setSelectedGroup(newProj);
-              setSelectedId(null);
-            } else {
-              setSelectedId(newStream.id);
-              const m = newStream.label.match(/\[([^\]]+)\]/);
-              setSelectedGroup(m ? m[1] : 'unknown');
-            }
-          }
+          const newStream = currentGroupStreams[safeIdx - 1];
+          if (newStream) setSelectedId(newStream.id);
         }
       } else if (key.downArrow || input === 'j') {
-        const newIdx = Math.min(current.length - 1, safeIdx + 1);
-        const newStream = current[newIdx];
-        if (newStream) {
-          const newProj = newStream.label.match(/\[([^\]]+)\]/)?.[1] ?? 'unknown';
-          if (collapsedGroups?.has(newProj)) {
-            setSelectedGroup(newProj);
-            setSelectedId(null);
-          } else {
-            setSelectedId(newStream.id);
-            const m = newStream.label.match(/\[([^\]]+)\]/);
-            setSelectedGroup(m ? m[1] : 'unknown');
+        if (safeIdx >= currentGroupStreams.length - 1) {
+          // At bottom of group — move to next group
+          const gIdx = groupOrder.indexOf(selectedGroup!);
+          if (gIdx < groupOrder.length - 1) {
+            const nextGroup = groupOrder[gIdx + 1]!;
+            setSelectedGroup(nextGroup);
+            if (collapsedGroups?.has(nextGroup)) {
+              setSelectedId(null);
+            } else {
+              const firstInNext = current.find(s => {
+                const m = s.label.match(/\[([^\]]+)\]/);
+                return (m ? m[1] : 'unknown') === nextGroup;
+              });
+              if (firstInNext) setSelectedId(firstInNext.id);
+            }
           }
+        } else {
+          const newStream = currentGroupStreams[safeIdx + 1];
+          if (newStream) setSelectedId(newStream.id);
         }
       } else if (key.escape) {
-        // Go back to group level
+        // Collapse current group, go back to group level
+        setCollapsedGroups(prev => {
+          const next = new Set(prev);
+          next.add(selectedGroup!);
+          return next;
+        });
         setSelectedId(null);
       } else if (key.return) {
-        const stream = current[safeIdx];
+        const stream = currentGroupStreams[safeIdx];
         if (stream) {
           if (stream.done && !expandedIds.has(stream.id)) {
             setExpandedIds(prev => new Set([...prev, stream.id]));
