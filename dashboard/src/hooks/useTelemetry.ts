@@ -102,6 +102,19 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
       stream.failures++;
     }
 
+    // Track token usage from agent_stop events (cumulative from transcript)
+    if (ev.event === 'agent_stop') {
+      const tokens = (ev as any).tokens;
+      if (tokens && (tokens.input > 0 || tokens.output > 0 || tokens.cache_read > 0 || tokens.cache_write > 0)) {
+        stream.tokens = {
+          input: tokens.input ?? 0,
+          output: tokens.output ?? 0,
+          cache_read: tokens.cache_read ?? 0,
+          cache_write: tokens.cache_write ?? 0,
+        };
+      }
+    }
+
     // Handle session end
     if (ev.event === 'session_end') {
       stream.active = false;
@@ -131,6 +144,21 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
         ? new Date(stream.events[stream.events.length - 1]!.ts).getTime()
         : stream.startTime;
       stream.idle = now - lastEventTime > IDLE_THRESHOLD_MS;
+    }
+
+    // Read token data from buffer for active sessions (most up-to-date)
+    if (hasBuffer) {
+      try {
+        const bufferPath = path.join(DEFAULT_BASE, 'buffer', `${id}.json`);
+        const buf = JSON.parse(fs.readFileSync(bufferPath, 'utf-8'));
+        const ti = buf.tokens_input ?? 0;
+        const to = buf.tokens_output ?? 0;
+        const cr = buf.tokens_cache_read ?? 0;
+        const cw = buf.tokens_cache_write ?? 0;
+        if (ti > 0 || to > 0 || cr > 0 || cw > 0) {
+          stream.tokens = { input: ti, output: to, cache_read: cr, cache_write: cw };
+        }
+      } catch { /* ignore read errors */ }
     }
   }
 

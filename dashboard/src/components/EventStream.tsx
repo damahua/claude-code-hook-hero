@@ -25,6 +25,7 @@ interface AgentStream {
   events: StreamEvent[];
   toolCounts: Record<string, number>;
   failures: number;
+  tokens?: { input: number; output: number; cache_read: number; cache_write: number };
 }
 
 // Full-width block characters — easy to read at any terminal size
@@ -49,6 +50,12 @@ function formatDuration(ms: number): string {
 }
 
 const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return String(n);
+}
 
 /** Extract short project name from label */
 function extractProject(label: string): string | null {
@@ -138,6 +145,13 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
           <>
             <Text color="#484f58"> · </Text>
             <Text color="#f85149" bold>{stream.failures} err</Text>
+          </>
+        )}
+        {stream.tokens && (stream.tokens.input > 0 || stream.tokens.output > 0) && (
+          <>
+            <Text color="#484f58"> · </Text>
+            <Text color="#d29922">{formatTokens(stream.tokens.input + stream.tokens.output + stream.tokens.cache_read)}</Text>
+            <Text color="#6e7681"> tok</Text>
           </>
         )}
         {collapsed && totalTools > 0 && (
