@@ -202,15 +202,45 @@ function estimateStreamLines(stream: AgentStream, collapsed: boolean = false): n
   return hasTools ? 3 : 2; // header + bar + optional tools
 }
 
+interface GroupSummary {
+  total: number;
+  active: number;
+  idle: number;
+  done: number;
+  totalOps: number;
+  totalFailures: number;
+  totalTokens: number;
+}
+
+function computeGroupSummary(streams: AgentStream[]): GroupSummary {
+  let totalOps = 0;
+  let totalFailures = 0;
+  let totalTokens = 0;
+  let active = 0;
+  let idle = 0;
+  let done = 0;
+  for (const s of streams) {
+    totalOps += Object.values(s.toolCounts).reduce((a, b) => a + b, 0);
+    totalFailures += s.failures;
+    if (s.tokens) totalTokens += s.tokens.input + s.tokens.output;
+    if (s.done) done++;
+    else if (s.idle) idle++;
+    else active++;
+  }
+  return { total: streams.length, active, idle, done, totalOps, totalFailures, totalTokens };
+}
+
 interface EventStreamProps {
   streams: AgentStream[];
   width?: number;
   selectedIndex?: number;
   maxLines?: number;
   expandedIds?: Set<string>;
+  collapsedGroups?: Set<string>;
+  selectedGroup?: string | null;
 }
 
-export function EventStream({ streams, width = 55, selectedIndex, maxLines, expandedIds }: EventStreamProps) {
+export function EventStream({ streams, width = 55, selectedIndex, maxLines, expandedIds, collapsedGroups, selectedGroup }: EventStreamProps) {
   const sorted = sortStreams(streams);
 
   // Group by project
@@ -306,17 +336,62 @@ export function EventStream({ streams, width = 55, selectedIndex, maxLines, expa
       ) : (
         <Box flexDirection="column">
           {Array.from(groups.entries()).map(([project, group]) => {
-            // Filter to visible streams in this group
+            const isGroupCollapsed = collapsedGroups?.has(project) ?? false;
+            const isGroupSelected = selectedGroup === project;
+            const summary = computeGroupSummary(group.streams);
+
+            // Collapsed group — single summary line
+            if (isGroupCollapsed) {
+              return (
+                <Box key={project}>
+                  <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '▸' : ' '}</Text>
+                  <Text color="#d2a8ff" bold>{isGroupCollapsed ? '▶' : '▼'} {project}</Text>
+                  <Text color="#484f58"> · </Text>
+                  <Text color="#6e7681">{summary.total} sess</Text>
+                  {summary.active > 0 && (
+                    <>
+                      <Text color="#484f58"> · </Text>
+                      <Text color="#58a6ff">{summary.active} active</Text>
+                    </>
+                  )}
+                  <Text color="#484f58"> · </Text>
+                  <Text color="#6e7681">{summary.totalOps} ops</Text>
+                  {summary.totalFailures > 0 && (
+                    <>
+                      <Text color="#484f58"> · </Text>
+                      <Text color="#f85149">{summary.totalFailures} err</Text>
+                    </>
+                  )}
+                  {summary.totalTokens > 0 && (
+                    <>
+                      <Text color="#484f58"> · </Text>
+                      <Text color="#d29922">{formatTokens(summary.totalTokens)} tok</Text>
+                    </>
+                  )}
+                </Box>
+              );
+            }
+
+            // Expanded group — show streams
             const visibleStreams = group.streams.filter((_, j) =>
               !visibleSet || visibleSet.has(group.globalIndices[j]!)
             );
-            if (visibleStreams.length === 0) return null;
+            if (visibleStreams.length === 0 && !isGroupSelected) return null;
 
             return (
               <Box key={project} flexDirection="column">
                 <Box>
-                  <Text color="#d2a8ff" bold> {project}</Text>
-                  <Text color="#30363d"> {'─'.repeat(Math.max(1, width - project.length - 4))}</Text>
+                  <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '▸' : ' '}</Text>
+                  <Text color="#d2a8ff" bold>▼ {project}</Text>
+                  <Text color="#484f58"> · </Text>
+                  <Text color="#6e7681">{summary.total} sess</Text>
+                  {summary.active > 0 && (
+                    <>
+                      <Text color="#484f58"> · </Text>
+                      <Text color="#58a6ff">{summary.active} active</Text>
+                    </>
+                  )}
+                  <Text color="#30363d"> {'─'.repeat(Math.max(1, width - project.length - 25))}</Text>
                 </Box>
                 {group.streams.map((stream, j) => {
                   if (visibleSet && !visibleSet.has(group.globalIndices[j]!)) return null;

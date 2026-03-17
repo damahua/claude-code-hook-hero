@@ -38,6 +38,8 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   const [elapsed, setElapsed] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string> | null>(null); // null = not yet initialized
+  const [selectedGroup, setSelectedGroup] = useState<string | null>(null); // when navigating at group level
   const [detailStreamId, setDetailStreamId] = useState<string | null>(null);
   const [detailScroll, setDetailScroll] = useState(0);
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
@@ -66,6 +68,22 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     : data.streams;
 
   const sorted = sortStreams(filteredStreams);
+
+  // Initialize collapsedGroups on first data load — all collapsed by default
+  useEffect(() => {
+    if (collapsedGroups === null && allProjects.length > 0) {
+      setCollapsedGroups(new Set(allProjects));
+      setSelectedGroup(allProjects[0] ?? null);
+    }
+  }, [allProjects.length, collapsedGroups]);
+
+  // Build ordered group list for navigation
+  const groupOrder = Array.from(new Set(
+    sorted.map(s => {
+      const match = s.label.match(/\[([^\]]+)\]/);
+      return match ? match[1] : 'unknown';
+    })
+  ));
 
   // Use a ref to give useInput access to the latest sorted array
   const sortedRef = useRef(sorted);
@@ -101,21 +119,92 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
       } else if (input === 'G') {
         setDetailScroll(Math.max(0, detailStream.events.length - 10));
       }
+    } else if (selectedGroup !== null && (collapsedGroups?.has(selectedGroup) || selectedId === null)) {
+      // Group-level navigation (all groups collapsed or no stream selected)
+      const gIdx = groupOrder.indexOf(selectedGroup);
+
+      if (key.upArrow || input === 'k') {
+        const newIdx = Math.max(0, gIdx - 1);
+        setSelectedGroup(groupOrder[newIdx] ?? null);
+        setSelectedId(null);
+      } else if (key.downArrow || input === 'j') {
+        const newIdx = Math.min(groupOrder.length - 1, gIdx + 1);
+        setSelectedGroup(groupOrder[newIdx] ?? null);
+        setSelectedId(null);
+      } else if (key.return) {
+        // Toggle group collapse
+        setCollapsedGroups(prev => {
+          const next = new Set(prev);
+          if (next.has(selectedGroup!)) {
+            next.delete(selectedGroup!);
+            // Select first stream in the expanded group
+            const firstInGroup = current.find(s => {
+              const m = s.label.match(/\[([^\]]+)\]/);
+              return (m ? m[1] : 'unknown') === selectedGroup;
+            });
+            if (firstInGroup) setTimeout(() => setSelectedId(firstInGroup.id), 0);
+          } else {
+            next.add(selectedGroup!);
+            setSelectedId(null);
+          }
+          return next;
+        });
+      } else if (input === 'f') {
+        setProjectFilter(prev => {
+          if (prev === null) return allProjects[0] ?? null;
+          const idx = allProjects.indexOf(prev);
+          if (idx === -1 || idx === allProjects.length - 1) return null;
+          return allProjects[idx + 1]!;
+        });
+        setSelectedId(null);
+      } else if (input === 'q') {
+        process.exit(0);
+      }
     } else {
-      // Find current position of selectedId in the latest sorted array
+      // Stream-level navigation (inside an expanded group)
       const curIdx = selectedId ? current.findIndex(s => s.id === selectedId) : 0;
       const safeIdx = curIdx === -1 ? 0 : curIdx;
 
       if (key.upArrow || input === 'k') {
-        const newIdx = Math.max(0, safeIdx - 1);
-        if (current[newIdx]) setSelectedId(current[newIdx]!.id);
+        if (safeIdx === 0) {
+          // At top of list — go back to group level
+          setSelectedId(null);
+        } else {
+          const newIdx = safeIdx - 1;
+          const newStream = current[newIdx];
+          if (newStream) {
+            // Check if crossing into a collapsed group
+            const newProj = newStream.label.match(/\[([^\]]+)\]/)?.[1] ?? 'unknown';
+            if (collapsedGroups?.has(newProj)) {
+              setSelectedGroup(newProj);
+              setSelectedId(null);
+            } else {
+              setSelectedId(newStream.id);
+              const m = newStream.label.match(/\[([^\]]+)\]/);
+              setSelectedGroup(m ? m[1] : 'unknown');
+            }
+          }
+        }
       } else if (key.downArrow || input === 'j') {
         const newIdx = Math.min(current.length - 1, safeIdx + 1);
-        if (current[newIdx]) setSelectedId(current[newIdx]!.id);
+        const newStream = current[newIdx];
+        if (newStream) {
+          const newProj = newStream.label.match(/\[([^\]]+)\]/)?.[1] ?? 'unknown';
+          if (collapsedGroups?.has(newProj)) {
+            setSelectedGroup(newProj);
+            setSelectedId(null);
+          } else {
+            setSelectedId(newStream.id);
+            const m = newStream.label.match(/\[([^\]]+)\]/);
+            setSelectedGroup(m ? m[1] : 'unknown');
+          }
+        }
+      } else if (key.escape) {
+        // Go back to group level
+        setSelectedId(null);
       } else if (key.return) {
         const stream = current[safeIdx];
         if (stream) {
-          // If done and collapsed → expand; if already expanded or active → detail view
           if (stream.done && !expandedIds.has(stream.id)) {
             setExpandedIds(prev => new Set([...prev, stream.id]));
           } else {
@@ -124,14 +213,13 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
           }
         }
       } else if (input === 'f') {
-        // Cycle project filter: null → project1 → project2 → ... → null
         setProjectFilter(prev => {
           if (prev === null) return allProjects[0] ?? null;
           const idx = allProjects.indexOf(prev);
           if (idx === -1 || idx === allProjects.length - 1) return null;
           return allProjects[idx + 1]!;
         });
-        setSelectedId(null); // reset selection on filter change
+        setSelectedId(null);
       } else if (input === 'q') {
         process.exit(0);
       }
@@ -200,27 +288,31 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
 
       {/* Streams */}
       <EventStream
-        streams={data.streams}
+        streams={filteredStreams}
         width={termWidth - 4}
         selectedIndex={selectedIndex}
         maxLines={availableLines}
         expandedIds={expandedIds}
+        collapsedGroups={collapsedGroups ?? new Set()}
+        selectedGroup={selectedGroup}
       />
 
       {/* Footer */}
       <Box paddingLeft={1}>
-        <Text color="#484f58">↑↓</Text>
-        <Text color="#30363d"> navigate </Text>
-        <Text color="#484f58">↵</Text>
-        <Text color="#30363d"> expand/details </Text>
-        <Text color="#484f58">f</Text>
-        <Text color="#30363d"> filter</Text>
+        <Text color="#c9d1d9" bold>↑↓</Text>
+        <Text color="#8b949e"> navigate </Text>
+        <Text color="#c9d1d9" bold>↵</Text>
+        <Text color="#8b949e"> expand </Text>
+        <Text color="#c9d1d9" bold>esc</Text>
+        <Text color="#8b949e"> collapse </Text>
+        <Text color="#c9d1d9" bold>f</Text>
+        <Text color="#8b949e"> filter</Text>
         {projectFilter && (
           <Text color="#d2a8ff"> [{projectFilter}]</Text>
         )}
-        <Text color="#30363d"> </Text>
-        <Text color="#484f58">q</Text>
-        <Text color="#30363d"> quit</Text>
+        <Text color="#8b949e"> </Text>
+        <Text color="#c9d1d9" bold>q</Text>
+        <Text color="#8b949e"> quit</Text>
       </Box>
     </Box>
   );
