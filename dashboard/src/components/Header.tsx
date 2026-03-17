@@ -2,40 +2,40 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text } from 'ink';
 
 const LOGO = [
-  ' ╦ ╦╔═╗╔═╗╦╔═  ╦ ╦╔═╗╦═╗╔═╗ ',
-  ' ╠═╣║ ║║ ║╠╩╗  ╠═╣║╣ ╠╦╝║ ║ ',
-  ' ╩ ╩╚═╝╚═╝╩ ╩  ╩ ╩╚═╝╩╚═╚═╝ ',
+  ' ╦ ╦╔═╗╔═╗╦╔═  ╦ ╦╔═╗╦═╗╔═╗',
+  ' ╠═╣║ ║║ ║╠╩╗  ╠═╣║╣ ╠╦╝║ ║',
+  ' ╩ ╩╚═╝╚═╝╩ ╩  ╩ ╩╚═╝╩╚═╚═╝',
 ];
 
+const SPARKLE = ['✦', '✧', '⋆', '✦', '✧', '⋆'];
+
 export function Header({ mode }: { mode: 'live' | 'history' }) {
-  const [pulse, setPulse] = useState(true);
+  const [frame, setFrame] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setPulse(p => !p), 800);
+    const timer = setInterval(() => setFrame(f => (f + 1) % SPARKLE.length), 400);
     return () => clearInterval(timer);
   }, []);
 
+  const sparkle = SPARKLE[frame];
+
   return (
-    <Box flexDirection="column" alignItems="center" marginBottom={1}>
-      <Box flexDirection="column" alignItems="center">
+    <Box flexDirection="column" marginBottom={0}>
+      <Box flexDirection="column">
         {LOGO.map((line, i) => (
-          <Text key={i} color="#e2e8f0">{line}</Text>
+          <Text key={i} color={['#58a6ff', '#d2a8ff', '#58a6ff'][i]} bold>{line}</Text>
         ))}
       </Box>
       <Box>
-        <Text color="#334155">{'─'.repeat(8)} </Text>
+        <Text color="#30363d">{'─'.repeat(6)}</Text>
+        <Text color="#d2a8ff"> {sparkle} </Text>
         {mode === 'live' ? (
-          <>
-            <Text color={pulse ? '#22c55e' : '#15803d'}>●</Text>
-            <Text color="#94a3b8"> live telemetry </Text>
-          </>
+          <Text color="#c9d1d9" bold>agent telemetry</Text>
         ) : (
-          <>
-            <Text color="#3b82f6">◆</Text>
-            <Text color="#94a3b8"> session history </Text>
-          </>
+          <Text color="#c9d1d9" bold>session replay</Text>
         )}
-        <Text color="#334155">{'─'.repeat(8)}</Text>
+        <Text color="#d2a8ff"> {sparkle} </Text>
+        <Text color="#30363d">{'─'.repeat(6)}</Text>
       </Box>
     </Box>
   );

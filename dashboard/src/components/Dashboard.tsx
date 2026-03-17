@@ -1,15 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Box, Text, useStdout } from 'ink';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Text, useStdout, useInput } from 'ink';
 import { Header } from './Header.js';
-import { Panel, StatRow, ToolBar } from './Panel.js';
-import { EventStream } from './EventStream.js';
+import { ToolBar } from './Panel.js';
+import { EventStream, sortStreams } from './EventStream.js';
+import { StreamDetail } from './StreamDetail.js';
 import type { TelemetryState } from '../hooks/useTelemetry.js';
 
 function formatCost(usd: number): string {
+  if (usd === 0) return '—';
   return `$${usd.toFixed(2)}`;
 }
 
 function formatTokens(n: number): string {
+  if (n === 0) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
@@ -30,58 +33,155 @@ interface DashboardProps {
 export function Dashboard({ data, mode, date }: DashboardProps) {
   const { stdout } = useStdout();
   const termWidth = stdout?.columns || 80;
-  const halfWidth = Math.floor((termWidth - 2) / 2);
+  const termHeight = stdout?.rows || 24;
 
   const [elapsed, setElapsed] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [detailStreamId, setDetailStreamId] = useState<string | null>(null);
+  const [detailScroll, setDetailScroll] = useState(0);
+
   useEffect(() => {
     if (mode !== 'live') return;
     const timer = setInterval(() => setElapsed(e => e + 1), 1000);
     return () => clearInterval(timer);
   }, [mode]);
 
-  const activeStreams = data.streams.filter(s => s.active).length;
+  const sorted = sortStreams(data.streams);
+
+  // Use a ref to give useInput access to the latest sorted array
+  const sortedRef = useRef(sorted);
+  sortedRef.current = sorted;
+
+  // Resolve selectedId to an index in the current sorted array
+  let selectedIndex = selectedId ? sorted.findIndex(s => s.id === selectedId) : -1;
+  if (selectedIndex === -1 && sorted.length > 0) {
+    // Selection lost (stream removed or first render) — select first
+    selectedIndex = 0;
+    // Defer the state update to avoid setting state during render
+    if (selectedId !== sorted[0]!.id) {
+      setTimeout(() => setSelectedId(sorted[0]!.id), 0);
+    }
+  }
+
+  // Find the detail stream by ID
+  const detailStream = detailStreamId ? sorted.find(s => s.id === detailStreamId) : null;
+
+  useInput((input, key) => {
+    const current = sortedRef.current;
+
+    if (detailStream) {
+      if (key.escape || input === 'q') {
+        setDetailStreamId(null);
+        setDetailScroll(0);
+      } else if (key.upArrow) {
+        setDetailScroll(s => Math.max(0, s - 1));
+      } else if (key.downArrow) {
+        setDetailScroll(s => Math.min(detailStream.events.length - 1, s + 1));
+      } else if (input === 'g') {
+        setDetailScroll(0);
+      } else if (input === 'G') {
+        setDetailScroll(Math.max(0, detailStream.events.length - 10));
+      }
+    } else {
+      // Find current position of selectedId in the latest sorted array
+      const curIdx = selectedId ? current.findIndex(s => s.id === selectedId) : 0;
+      const safeIdx = curIdx === -1 ? 0 : curIdx;
+
+      if (key.upArrow || input === 'k') {
+        const newIdx = Math.max(0, safeIdx - 1);
+        if (current[newIdx]) setSelectedId(current[newIdx]!.id);
+      } else if (key.downArrow || input === 'j') {
+        const newIdx = Math.min(current.length - 1, safeIdx + 1);
+        if (current[newIdx]) setSelectedId(current[newIdx]!.id);
+      } else if (key.return) {
+        const stream = current[safeIdx];
+        if (stream) {
+          // If done and collapsed → expand; if already expanded or active → detail view
+          if (stream.done && !expandedIds.has(stream.id)) {
+            setExpandedIds(prev => new Set([...prev, stream.id]));
+          } else {
+            setDetailStreamId(stream.id);
+            setDetailScroll(0);
+          }
+        }
+      } else if (input === 'q') {
+        process.exit(0);
+      }
+    }
+  });
+
+  // Detail view
+  if (detailStream) {
+    return (
+      <StreamDetail
+        stream={detailStream}
+        width={termWidth - 2}
+        height={termHeight}
+        scrollOffset={detailScroll}
+      />
+    );
+  }
+
+  // Chrome lines: header(4) + stats(1) + tools(~2) + stream-header(1) + footer(1)
+  const chromeLines = 8 + (Object.keys(data.toolCounts).length > 0 ? 2 : 0);
+  const availableLines = termHeight - chromeLines;
 
   return (
     <Box flexDirection="column">
       <Header mode={mode} />
 
-      <Box>
-        <Panel title="session" width={halfWidth}>
-          <StatRow label="sessions" value={data.totalSessions} highlight />
-          <StatRow label="channels" value={data.channels.join(', ') || '—'} />
-          <StatRow label="repos" value={data.repos.length > 0 ? data.repos.join(', ') : '—'} />
-          {mode === 'live' && activeStreams > 0 && (
-            <StatRow label="active" value={`${activeStreams} stream${activeStreams > 1 ? 's' : ''}`} highlight />
-          )}
-          {mode === 'live' && (
-            <StatRow label="uptime" value={formatUptime(elapsed)} />
-          )}
-        </Panel>
-        <Panel title="tools" width={halfWidth}>
-          <StatRow label="total calls" value={data.totalTools} highlight />
-          <StatRow label="failures" value={data.totalFailures} warn={data.totalFailures > 0} />
-          <ToolBar tools={data.toolCounts} />
-        </Panel>
+      {/* Stats bar */}
+      <Box paddingLeft={1}>
+        <Text color="#e6edf3" bold>{data.totalSessions}</Text>
+        <Text color="#6e7681"> sessions </Text>
+        <Text color="#484f58">│ </Text>
+        <Text color="#e6edf3" bold>{data.totalTools}</Text>
+        <Text color="#6e7681"> ops </Text>
+        {data.totalFailures > 0 && (
+          <>
+            <Text color="#484f58">│ </Text>
+            <Text color="#f85149" bold>{data.totalFailures}</Text>
+            <Text color="#6e7681"> err </Text>
+          </>
+        )}
+        <Text color="#484f58">│ </Text>
+        <Text color="#c9d1d9">{formatTokens(data.totalTokens)}</Text>
+        <Text color="#6e7681"> tok </Text>
+        <Text color="#484f58">│ </Text>
+        <Text color="#c9d1d9">{formatCost(data.totalCost)}</Text>
+        {mode === 'live' && (
+          <>
+            <Text color="#484f58"> │ </Text>
+            <Text color="#6e7681">{formatUptime(elapsed)}</Text>
+          </>
+        )}
       </Box>
 
-      <Box>
-        <Panel title="tokens" width={halfWidth}>
-          <StatRow label="total" value={formatTokens(data.totalTokens)} highlight />
-          <StatRow label="est. cost" value={formatCost(data.totalCost)} highlight />
-        </Panel>
-        <Panel title="agents" width={halfWidth}>
-          <StatRow label="spawned" value={data.streams.filter(s => s.type === 'subagent').length} />
-          <StatRow label="active" value={data.streams.filter(s => s.type === 'subagent' && s.active).length}
-            highlight={data.streams.some(s => s.type === 'subagent' && s.active)} />
-        </Panel>
-      </Box>
+      {/* Tool breakdown */}
+      {Object.keys(data.toolCounts).length > 0 && (
+        <Box paddingLeft={1}>
+          <ToolBar tools={data.toolCounts} maxItems={8} />
+        </Box>
+      )}
 
-      <EventStream streams={data.streams} width={termWidth - 6} />
+      {/* Streams */}
+      <EventStream
+        streams={data.streams}
+        width={termWidth - 4}
+        selectedIndex={selectedIndex}
+        maxLines={availableLines}
+        expandedIds={expandedIds}
+      />
 
-      <Box justifyContent="center">
-        <Text color="#334155">
-          {'─'.repeat(6)} hook-hero{mode === 'live' ? ' · ctrl+c to quit' : ''} {'─'.repeat(6)}
-        </Text>
+      {/* Footer */}
+      <Box paddingLeft={1}>
+        <Text color="#484f58">↑↓</Text>
+        <Text color="#30363d"> navigate </Text>
+        <Text color="#484f58">↵</Text>
+        <Text color="#30363d"> expand/details </Text>
+        <Text color="#484f58">q</Text>
+        <Text color="#30363d"> quit</Text>
       </Box>
     </Box>
   );

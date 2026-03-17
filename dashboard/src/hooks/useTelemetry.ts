@@ -57,14 +57,17 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
 
     if (!streams.has(streamId)) {
       const channel = (ev as any).channel;
+      const projectName = (ev as any).context?.project_name;
+      const dirLabel = projectName ? ` [${projectName}]` : '';
       streams.set(streamId, {
         id: streamId,
         label: streamType === 'main'
-          ? `${channel || 'claude-code'} · ${sessionId.slice(0, 8)}`
+          ? `${channel || 'claude-code'} · ${sessionId.slice(0, 8)}${dirLabel}`
           : streamLabel,
         type: streamType,
         channel,
         active: true,
+        idle: false,
         done: false,
         startTime: new Date(ev.ts).getTime(),
         events: [],
@@ -75,6 +78,21 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
 
     const stream = streams.get(streamId)!;
     stream.events.push(ev);
+
+    // Handle session restart — reset done/active when a new session_start arrives
+    if (ev.event === 'session_start') {
+      stream.active = true;
+      stream.done = false;
+      stream.startTime = new Date(ev.ts).getTime();
+      stream.endTime = undefined;
+      const channel = (ev as any).channel;
+      const projectName = (ev as any).context?.project_name;
+      const dirLabel = projectName ? ` [${projectName}]` : '';
+      if (channel) {
+        stream.channel = channel;
+        stream.label = `${channel} · ${sessionId.slice(0, 8)}${dirLabel}`;
+      }
+    }
 
     // Track tool counts
     if ((ev.event === 'tool_end' || ev.event === 'tool_failure') && ev.tool) {
@@ -89,6 +107,30 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
       stream.active = false;
       stream.done = true;
       stream.endTime = new Date(ev.ts).getTime();
+    }
+  }
+
+  // Filter ghosts and mark idle streams
+  const LIFECYCLE_EVENTS = new Set(['session_start', 'session_end']);
+  const IDLE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+  const now = Date.now();
+
+  for (const [id, stream] of streams) {
+    const hasActivity = stream.events.some(ev => !LIFECYCLE_EVENTS.has(ev.event));
+    const hasBuffer = fs.existsSync(path.join(DEFAULT_BASE, 'buffer', `${id}.json`));
+
+    // Remove ghost streams (no activity + no buffer)
+    if (!hasActivity && !hasBuffer) {
+      streams.delete(id);
+      continue;
+    }
+
+    // Mark idle: has buffer (session alive) but no recent events
+    if (stream.active && !stream.done) {
+      const lastEventTime = stream.events.length > 0
+        ? new Date(stream.events[stream.events.length - 1]!.ts).getTime()
+        : stream.startTime;
+      stream.idle = now - lastEventTime > IDLE_THRESHOLD_MS;
     }
   }
 
