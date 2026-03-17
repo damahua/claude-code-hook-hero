@@ -38,7 +38,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   const [elapsed, setElapsed] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string> | null>(null); // null = not yet initialized
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set()); // start expanded
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null); // when navigating at group level
   const [detailStreamId, setDetailStreamId] = useState<string | null>(null);
   const [detailScroll, setDetailScroll] = useState(0);
@@ -68,14 +68,6 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     : data.streams;
 
   const sorted = sortStreams(filteredStreams);
-
-  // Initialize collapsedGroups on first data load — all collapsed by default
-  useEffect(() => {
-    if (collapsedGroups === null && allProjects.length > 0) {
-      setCollapsedGroups(new Set(allProjects));
-      setSelectedGroup(allProjects[0] ?? null);
-    }
-  }, [allProjects.length, collapsedGroups]);
 
   // Build ordered group list for navigation
   const groupOrder = Array.from(new Set(
@@ -149,6 +141,13 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
           }
           return next;
         });
+      } else if (input === 'c') {
+        // Collapse all groups
+        setCollapsedGroups(new Set(groupOrder));
+        setSelectedId(null);
+      } else if (input === 'e') {
+        // Expand all groups
+        setCollapsedGroups(new Set());
       } else if (input === 'f') {
         setProjectFilter(prev => {
           if (prev === null) return allProjects[0] ?? null;
@@ -217,6 +216,11 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
             setDetailScroll(0);
           }
         }
+      } else if (input === 'c') {
+        setCollapsedGroups(new Set(groupOrder));
+        setSelectedId(null);
+      } else if (input === 'e') {
+        setCollapsedGroups(new Set());
       } else if (input === 'f') {
         setProjectFilter(prev => {
           if (prev === null) return allProjects[0] ?? null;
@@ -310,6 +314,10 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         <Text color="#8b949e"> expand </Text>
         <Text color="#c9d1d9" bold>esc</Text>
         <Text color="#8b949e"> collapse </Text>
+        <Text color="#c9d1d9" bold>c</Text>
+        <Text color="#8b949e">/</Text>
+        <Text color="#c9d1d9" bold>e</Text>
+        <Text color="#8b949e"> all </Text>
         <Text color="#c9d1d9" bold>f</Text>
         <Text color="#8b949e"> filter</Text>
         {projectFilter && (
