@@ -40,6 +40,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [detailStreamId, setDetailStreamId] = useState<string | null>(null);
   const [detailScroll, setDetailScroll] = useState(0);
+  const [projectFilter, setProjectFilter] = useState<string | null>(null);
 
   useEffect(() => {
     if (mode !== 'live') return;
@@ -47,7 +48,24 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     return () => clearInterval(timer);
   }, [mode]);
 
-  const sorted = sortStreams(data.streams);
+  // Collect unique project names for filter cycling
+  const allProjects = Array.from(new Set(
+    data.streams.map(s => {
+      const match = s.label.match(/\[([^\]]+)\]/);
+      return match ? match[1] : 'unknown';
+    })
+  )).sort();
+
+  // Apply project filter
+  const filteredStreams = projectFilter
+    ? data.streams.filter(s => {
+        const match = s.label.match(/\[([^\]]+)\]/);
+        const proj = match ? match[1] : 'unknown';
+        return proj === projectFilter;
+      })
+    : data.streams;
+
+  const sorted = sortStreams(filteredStreams);
 
   // Use a ref to give useInput access to the latest sorted array
   const sortedRef = useRef(sorted);
@@ -105,6 +123,15 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
             setDetailScroll(0);
           }
         }
+      } else if (input === 'f') {
+        // Cycle project filter: null → project1 → project2 → ... → null
+        setProjectFilter(prev => {
+          if (prev === null) return allProjects[0] ?? null;
+          const idx = allProjects.indexOf(prev);
+          if (idx === -1 || idx === allProjects.length - 1) return null;
+          return allProjects[idx + 1]!;
+        });
+        setSelectedId(null); // reset selection on filter change
       } else if (input === 'q') {
         process.exit(0);
       }
@@ -186,6 +213,12 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         <Text color="#30363d"> navigate </Text>
         <Text color="#484f58">↵</Text>
         <Text color="#30363d"> expand/details </Text>
+        <Text color="#484f58">f</Text>
+        <Text color="#30363d"> filter</Text>
+        {projectFilter && (
+          <Text color="#d2a8ff"> [{projectFilter}]</Text>
+        )}
+        <Text color="#30363d"> </Text>
         <Text color="#484f58">q</Text>
         <Text color="#30363d"> quit</Text>
       </Box>

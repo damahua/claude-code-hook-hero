@@ -73,6 +73,7 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
         events: [],
         toolCounts: {},
         failures: 0,
+        promptCount: 0,
       });
     }
 
@@ -92,6 +93,11 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
         stream.channel = channel;
         stream.label = `${channel} · ${sessionId.slice(0, 8)}${dirLabel}`;
       }
+    }
+
+    // Track prompt count (to distinguish interactive vs CLI)
+    if (ev.event === 'user_prompt') {
+      stream.promptCount++;
     }
 
     // Track tool counts

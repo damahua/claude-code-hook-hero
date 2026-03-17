@@ -26,6 +26,7 @@ interface AgentStream {
   toolCounts: Record<string, number>;
   failures: number;
   tokens?: { input: number; output: number; cache_read: number; cache_write: number };
+  promptCount: number;
 }
 
 // Full-width block characters — easy to read at any terminal size
@@ -118,6 +119,8 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
   const paddingCount = Math.max(0, barWidth - recentEvents.length);
 
   const isCompact = collapsed || stream.idle || (stream.done && totalTools <= 0);
+  // CLI = single prompt (claude -p), interactive = multiple prompts
+  const isCli = stream.done && stream.promptCount <= 1;
 
   return (
     <Box flexDirection="column">
@@ -125,6 +128,7 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
       <Box>
         <Text color={selected ? '#58a6ff' : '#30363d'}>{selected ? '▸' : ' '}</Text>
         <Text color={statusColor}>{statusChar} </Text>
+        <Text color={isCli ? '#6e7681' : '#06b6d4'}>{isCli ? '⚡' : '◈'} </Text>
         {project && (
           <>
             <Text color="#d2a8ff" bold={!stream.done && !stream.idle}>{project}</Text>
