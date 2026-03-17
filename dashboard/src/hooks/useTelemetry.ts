@@ -177,6 +177,8 @@ export interface TelemetryState {
   streams: AgentStream[];
   totalTokens: number;
   totalCost: number;
+  allTimeTokens: number;
+  allTimeCost: number;
   totalSessions: number;
   totalTools: number;
   totalFailures: number;
@@ -190,6 +192,8 @@ const EMPTY_STATE: TelemetryState = {
   streams: [],
   totalTokens: 0,
   totalCost: 0,
+  allTimeTokens: 0,
+  allTimeCost: 0,
   totalSessions: 0,
   totalTools: 0,
   totalFailures: 0,
@@ -198,6 +202,28 @@ const EMPTY_STATE: TelemetryState = {
   channels: [],
   latestEvents: [],
 };
+
+/** Sum tokens and cost from all session summaries across all dates */
+function computeAllTimeStats(baseDir: string): { tokens: number; cost: number } {
+  let tokens = 0;
+  let cost = 0;
+  const sessionsBase = path.join(baseDir, 'sessions');
+  try {
+    const dates = fs.readdirSync(sessionsBase).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
+    for (const date of dates) {
+      const dir = path.join(sessionsBase, date);
+      const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+      for (const file of files) {
+        try {
+          const summary = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
+          tokens += summary.tokens?.total || 0;
+          cost += summary.tokens?.estimated_cost_usd || 0;
+        } catch { /* skip malformed */ }
+      }
+    }
+  } catch { /* sessions dir missing */ }
+  return { tokens, cost };
+}
 
 export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState {
   const [state, setState] = useState<TelemetryState>(EMPTY_STATE);
@@ -285,10 +311,29 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
 
+    // All-time stats (finalized sessions across all dates + active streams)
+    const allTime = computeAllTimeStats(baseDir);
+    let allTimeTokens = allTime.tokens;
+    let allTimeCost = allTime.cost;
+    // Add active stream contributions
+    for (const stream of streams) {
+      if (!stream.done && stream.tokens) {
+        allTimeTokens += stream.tokens.input + stream.tokens.output;
+        const t = stream.tokens;
+        allTimeCost +=
+          (t.input / 1000) * 0.015 +
+          (t.output / 1000) * 0.075 +
+          (t.cache_read / 1000) * 0.00375 +
+          (t.cache_write / 1000) * 0.01875;
+      }
+    }
+
     setState({
       streams,
       totalTokens,
       totalCost,
+      allTimeTokens,
+      allTimeCost,
       totalSessions,
       totalTools,
       totalFailures,
@@ -383,11 +428,14 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
     const streams = Array.from(streamsMap.values());
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
+    const allTime = computeAllTimeStats(baseDir || DEFAULT_BASE);
 
     setState({
       streams,
       totalTokens,
       totalCost,
+      allTimeTokens: allTime.tokens,
+      allTimeCost: allTime.cost,
       totalSessions: summaries.length,
       totalTools,
       totalFailures,
