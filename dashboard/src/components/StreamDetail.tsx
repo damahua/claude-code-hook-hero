@@ -3,6 +3,17 @@ import { Box, Text } from 'ink';
 import { shortenToolName } from './Panel.js';
 import type { AgentStream, StreamEvent } from './EventStream.js';
 
+export interface DebugEntry {
+  ts: string;
+  type: 'tool_input' | 'tool_result' | 'tool_error' | 'assistant_message' | 'thinking';
+  tool?: string;
+  tool_use_id?: string;
+  input?: Record<string, any>;
+  result?: any;
+  error?: any;
+  text?: string;
+}
+
 function formatTime(ts: string): string {
   return new Date(ts).toLocaleTimeString('en-US', { hour12: false });
 }
@@ -51,20 +62,27 @@ interface StreamDetailProps {
   width: number;
   height: number;
   scrollOffset: number;
+  debugEntries?: DebugEntry[];
 }
 
-export function StreamDetail({ stream, width, height, scrollOffset }: StreamDetailProps) {
+export function StreamDetail({ stream, width, height, scrollOffset, debugEntries = [] }: StreamDetailProps) {
   const elapsed = (stream.endTime || Date.now()) - stream.startTime;
   const totalTools = Object.values(stream.toolCounts).reduce((s, c) => s + c, 0);
   const toolEntries = Object.entries(stream.toolCounts)
     .sort((a, b) => b[1] - a[1]);
 
-  // Calculate visible event window
-  const headerLines = 6; // header + tool summary + separator
+  // Merge events + debug entries into a unified timeline
+  type TimelineItem = { ts: string; kind: 'event'; event: StreamEvent } | { ts: string; kind: 'debug'; entry: DebugEntry };
+  const timeline: TimelineItem[] = [
+    ...stream.events.map(e => ({ ts: e.ts, kind: 'event' as const, event: e })),
+    ...debugEntries.map(d => ({ ts: d.ts, kind: 'debug' as const, entry: d })),
+  ].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
+  const headerLines = 6;
   const footerLines = 2;
   const availableLines = Math.max(5, height - headerLines - footerLines);
-  const visibleEvents = stream.events.slice(scrollOffset, scrollOffset + availableLines);
-  const totalEvents = stream.events.length;
+  const visibleItems = timeline.slice(scrollOffset, scrollOffset + availableLines);
+  const totalItems = timeline.length;
 
   return (
     <Box flexDirection="column" height={height}>
@@ -134,52 +152,107 @@ export function StreamDetail({ stream, width, height, scrollOffset }: StreamDeta
         </Box>
       )}
 
-      {/* Event list separator */}
+      {/* Timeline separator */}
       <Box>
         <Text color="#30363d">{'─'} </Text>
-        <Text color="#c9d1d9" bold>events</Text>
-        <Text color="#484f58"> ({totalEvents} total</Text>
-        {scrollOffset > 0 && <Text color="#484f58">, showing {scrollOffset + 1}-{Math.min(scrollOffset + availableLines, totalEvents)}</Text>}
+        <Text color="#c9d1d9" bold>timeline</Text>
+        <Text color="#484f58"> ({totalItems} items</Text>
+        {debugEntries.length > 0 && <Text color="#f59e0b">, {debugEntries.length} debug</Text>}
+        {scrollOffset > 0 && <Text color="#484f58">, from {scrollOffset + 1}</Text>}
         <Text color="#484f58">)</Text>
-        <Text color="#30363d"> {'─'.repeat(Math.max(1, width - 40))}</Text>
+        {stream.debugEnabled && <Text color="#f59e0b"> [DEBUG ON]</Text>}
+        <Text color="#30363d"> {'─'.repeat(Math.max(1, width - 50))}</Text>
       </Box>
 
-      {/* Scrollable event list */}
+      {/* Scrollable timeline */}
       <Box flexDirection="column" flexGrow={1}>
         {scrollOffset > 0 && (
           <Box paddingLeft={2}>
             <Text color="#484f58">↑ {scrollOffset} more above</Text>
           </Box>
         )}
-        {visibleEvents.map((ev, i) => (
-          <Box key={scrollOffset + i} paddingLeft={2}>
-            <Text color="#484f58">{formatTime(ev.ts)} </Text>
-            <Text color={eventColor(ev)}>{eventIcon(ev)} </Text>
-            <Text color={eventColor(ev)}>{ev.event}</Text>
-            {ev.tool && (
-              <>
-                <Text color="#484f58"> → </Text>
-                <Text color="#8b949e">{shortenToolName(ev.tool, 30)}</Text>
-              </>
-            )}
-            {ev.status && ev.status !== 'success' && (
-              <Text color="#f85149"> ({ev.status})</Text>
-            )}
-            {ev.error && (
-              <Text color="#f85149"> {ev.error.slice(0, 40)}</Text>
-            )}
-          </Box>
-        ))}
-        {scrollOffset + availableLines < totalEvents && (
+        {visibleItems.map((item, i) => {
+          if (item.kind === 'event') {
+            const ev = item.event;
+            return (
+              <Box key={scrollOffset + i} paddingLeft={2}>
+                <Text color="#484f58">{formatTime(ev.ts)} </Text>
+                <Text color={eventColor(ev)}>{eventIcon(ev)} </Text>
+                <Text color={eventColor(ev)}>{ev.event}</Text>
+                {ev.tool && (
+                  <>
+                    <Text color="#484f58"> → </Text>
+                    <Text color="#8b949e">{shortenToolName(ev.tool, 30)}</Text>
+                  </>
+                )}
+                {ev.status && ev.status !== 'success' && (
+                  <Text color="#f85149"> ({ev.status})</Text>
+                )}
+                {ev.error && (
+                  <Text color="#f85149"> {ev.error.slice(0, 40)}</Text>
+                )}
+              </Box>
+            );
+          } else {
+            const d = item.entry;
+            const maxLen = width - 30;
+            return (
+              <Box key={scrollOffset + i} paddingLeft={2} flexDirection="column">
+                <Box>
+                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                  <Text color="#f59e0b">{'◆'} </Text>
+                  <Text color="#f59e0b">{d.type}</Text>
+                  {d.tool && (
+                    <>
+                      <Text color="#484f58"> → </Text>
+                      <Text color="#8b949e">{shortenToolName(d.tool, 30)}</Text>
+                    </>
+                  )}
+                </Box>
+                {d.type === 'tool_input' && d.input && (
+                  <Box paddingLeft={4}>
+                    <Text color="#6e7681" wrap="truncate-end">{JSON.stringify(d.input).slice(0, maxLen)}</Text>
+                  </Box>
+                )}
+                {d.type === 'tool_result' && d.result && (
+                  <Box paddingLeft={4}>
+                    <Text color="#6e7681" wrap="truncate-end">{String(d.result).slice(0, maxLen)}</Text>
+                  </Box>
+                )}
+                {d.type === 'tool_error' && d.error && (
+                  <Box paddingLeft={4}>
+                    <Text color="#f85149" wrap="truncate-end">{String(d.error).slice(0, maxLen)}</Text>
+                  </Box>
+                )}
+                {d.type === 'thinking' && d.text && (
+                  <Box paddingLeft={4}>
+                    <Text color="#d2a8ff" wrap="truncate-end">{d.text.slice(0, maxLen)}</Text>
+                  </Box>
+                )}
+                {d.type === 'assistant_message' && d.text && (
+                  <Box paddingLeft={4}>
+                    <Text color="#c9d1d9" wrap="truncate-end">{d.text.slice(0, maxLen)}</Text>
+                  </Box>
+                )}
+              </Box>
+            );
+          }
+        })}
+        {scrollOffset + availableLines < totalItems && (
           <Box paddingLeft={2}>
-            <Text color="#484f58">↓ {totalEvents - scrollOffset - availableLines} more below</Text>
+            <Text color="#484f58">↓ {totalItems - scrollOffset - availableLines} more below</Text>
           </Box>
         )}
       </Box>
 
       {/* Footer */}
       <Box>
-        <Text color="#30363d">↑↓ scroll · esc back</Text>
+        <Text color="#8b949e">↑↓</Text>
+        <Text color="#484f58"> scroll </Text>
+        <Text color="#8b949e">g/G</Text>
+        <Text color="#484f58"> top/bottom </Text>
+        <Text color="#8b949e">esc</Text>
+        <Text color="#484f58"> back</Text>
       </Box>
     </Box>
   );

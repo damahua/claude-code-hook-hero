@@ -27,6 +27,7 @@ interface AgentStream {
   failures: number;
   tokens?: { input: number; output: number; cache_read: number; cache_write: number };
   promptCount: number;
+  debugEnabled: boolean;
 }
 
 // Full-width block characters — easy to read at any terminal size
@@ -157,6 +158,9 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
             <Text color="#d29922">{formatTokens(stream.tokens.input + stream.tokens.output)}</Text>
             <Text color="#6e7681"> tok</Text>
           </>
+        )}
+        {stream.debugEnabled && (
+          <Text color="#f59e0b"> [DEBUG]</Text>
         )}
         {collapsed && totalTools > 0 && (
           <Text color="#484f58"> ›››</Text>

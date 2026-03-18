@@ -1,10 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useStdout, useInput } from 'ink';
+import fs from 'node:fs';
+import path from 'node:path';
+import os from 'node:os';
 import { Header } from './Header.js';
 import { ToolBar } from './Panel.js';
 import { EventStream, sortStreams } from './EventStream.js';
 import { StreamDetail } from './StreamDetail.js';
+import type { DebugEntry } from './StreamDetail.js';
 import type { TelemetryState } from '../hooks/useTelemetry.js';
+
+const HOOK_HERO_BASE = path.join(os.homedir(), '.claude', 'hook-hero');
 
 function formatCost(usd: number): string {
   if (usd === 0) return '—';
@@ -216,6 +222,21 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
             setDetailScroll(0);
           }
         }
+      } else if (input === 'd') {
+        // Toggle debug mode for selected stream
+        const stream = currentGroupStreams[safeIdx];
+        if (stream) {
+          const debugPath = path.join(HOOK_HERO_BASE, 'buffer', `${stream.id}.debug`);
+          if (fs.existsSync(debugPath)) {
+            try { fs.unlinkSync(debugPath); } catch {}
+          } else {
+            // Only works for active sessions (need buffer)
+            const bufPath = path.join(HOOK_HERO_BASE, 'buffer', `${stream.id}.json`);
+            if (fs.existsSync(bufPath)) {
+              fs.writeFileSync(debugPath, '');
+            }
+          }
+        }
       } else if (input === 'c') {
         setCollapsedGroups(new Set(groupOrder));
         setSelectedId(null);
@@ -235,14 +256,32 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     }
   });
 
-  // Detail view
+  // Detail view — read debug entries if available
   if (detailStream) {
+    let debugEntries: DebugEntry[] = [];
+    // Check all date dirs for debug logs for this session
+    const debugBase = path.join(HOOK_HERO_BASE, 'debug');
+    try {
+      for (const dateDir of fs.readdirSync(debugBase)) {
+        const debugFile = path.join(debugBase, dateDir, `${detailStream.id}.jsonl`);
+        if (fs.existsSync(debugFile)) {
+          const content = fs.readFileSync(debugFile, 'utf-8').trim();
+          if (content) {
+            for (const line of content.split('\n')) {
+              try { debugEntries.push(JSON.parse(line)); } catch {}
+            }
+          }
+        }
+      }
+    } catch {}
+
     return (
       <StreamDetail
         stream={detailStream}
         width={termWidth - 2}
         height={termHeight}
         scrollOffset={detailScroll}
+        debugEntries={debugEntries}
       />
     );
   }
@@ -320,6 +359,8 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         <Text color="#8b949e"> expand </Text>
         <Text color="#c9d1d9" bold>esc</Text>
         <Text color="#8b949e"> collapse </Text>
+        <Text color="#c9d1d9" bold>d</Text>
+        <Text color="#8b949e"> debug </Text>
         <Text color="#c9d1d9" bold>c</Text>
         <Text color="#8b949e">/</Text>
         <Text color="#c9d1d9" bold>e</Text>

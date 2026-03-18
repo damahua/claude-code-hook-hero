@@ -75,6 +75,7 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
         toolCounts: {},
         failures: 0,
         promptCount: 0,
+        debugEnabled: false,
       });
     }
 
@@ -167,6 +168,9 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
         if (ti > 0 || to > 0 || cr > 0 || cw > 0) {
           stream.tokens = { input: ti, output: to, cache_read: cr, cache_write: cw };
         }
+
+        // Check debug mode
+        stream.debugEnabled = fs.existsSync(path.join(DEFAULT_BASE, 'buffer', `${id}.debug`));
 
         // Fill missing project name from buffer context
         const bufProject = buf.context?.project_name;
