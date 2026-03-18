@@ -249,17 +249,28 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
 
   const refresh = useCallback(() => {
     const date = today();
-    const eventsDir = path.join(baseDir, 'events', date);
     const bufferDir = path.join(baseDir, 'buffer');
 
-    // Read all events for today
-    const allEvents: StreamEvent[] = [];
+    // Collect dates to read: today + any dates from active buffers
+    const datesToRead = new Set<string>([date]);
+    try {
+      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json'))) {
+        try {
+          const buf = JSON.parse(fs.readFileSync(path.join(bufferDir, f), 'utf-8'));
+          if (buf.date) datesToRead.add(buf.date);
+        } catch {}
+      }
+    } catch {}
 
-    // From events directory
-    if (fs.existsSync(eventsDir)) {
-      const files = fs.readdirSync(eventsDir).filter(f => f.endsWith('.jsonl'));
-      for (const file of files) {
-        allEvents.push(...parseJsonlFile(path.join(eventsDir, file)));
+    // Read events from all relevant dates
+    const allEvents: StreamEvent[] = [];
+    for (const d of datesToRead) {
+      const eventsDir = path.join(baseDir, 'events', d);
+      if (fs.existsSync(eventsDir)) {
+        const files = fs.readdirSync(eventsDir).filter(f => f.endsWith('.jsonl'));
+        for (const file of files) {
+          allEvents.push(...parseJsonlFile(path.join(eventsDir, file)));
+        }
       }
     }
 
@@ -277,8 +288,9 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
     const repos = new Set<string>();
     const channels = new Set<string>();
 
-    // Read session summaries for completed sessions
-    const sessionsDir = path.join(baseDir, 'sessions', date);
+    // Read session summaries from all relevant dates
+    for (const d of datesToRead) {
+    const sessionsDir = path.join(baseDir, 'sessions', d);
     if (fs.existsSync(sessionsDir)) {
       const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
       for (const file of files) {
@@ -299,6 +311,7 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
         totalFailures += summary.tools?.failures || 0;
       }
     }
+    } // end datesToRead loop
 
     // Add stats from active streams (not yet finalized)
     for (const stream of streams) {
@@ -327,9 +340,15 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       activeSessions = fs.readdirSync(bufferDir).filter(f => f.endsWith('.json')).length;
     }
 
-    const totalSessions = (fs.existsSync(sessionsDir)
-      ? fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json')).length
-      : 0) + activeSessions;
+    // Count finalized sessions across all relevant dates
+    let finalizedSessions = 0;
+    for (const d of datesToRead) {
+      const sd = path.join(baseDir, 'sessions', d);
+      if (fs.existsSync(sd)) {
+        finalizedSessions += fs.readdirSync(sd).filter(f => f.endsWith('.json')).length;
+      }
+    }
+    const totalSessions = finalizedSessions + activeSessions;
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
     const totalPrompts = streams.reduce((s, st) => s + st.promptCount, 0);
@@ -377,13 +396,25 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
   useEffect(() => {
     refresh();
 
-    // Watch for file changes
-    const eventsDir = path.join(baseDir, 'events', today());
+    // Watch for file changes — today + any dates with active buffers
     const bufferDir = path.join(baseDir, 'buffer');
-    const sessionsDir = path.join(baseDir, 'sessions', today());
+    const watchDirs: string[] = [bufferDir];
+    const watchDates = new Set<string>([today()]);
+    try {
+      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json'))) {
+        try {
+          const buf = JSON.parse(fs.readFileSync(path.join(bufferDir, f), 'utf-8'));
+          if (buf.date) watchDates.add(buf.date);
+        } catch {}
+      }
+    } catch {}
+    for (const d of watchDates) {
+      watchDirs.push(path.join(baseDir, 'events', d));
+      watchDirs.push(path.join(baseDir, 'sessions', d));
+    }
 
     const watchers: fs.FSWatcher[] = [];
-    const dirs = [eventsDir, bufferDir, sessionsDir];
+    const dirs = watchDirs;
 
     for (const dir of dirs) {
       if (fs.existsSync(dir)) {
