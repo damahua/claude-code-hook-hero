@@ -263,9 +263,9 @@ export function EventStream({ streams, width = 55, selectedIndex, maxLines, expa
   let hiddenAbove = 0;
   let hiddenBelow = 0;
 
-  if (maxLines && maxLines > 0 && sorted.length > 0) {
+  if (maxLines && maxLines > 0 && sorted.length > 0 && selectedIndex != null && selectedIndex >= 0) {
     // Build line-cost array: [globalIndex, lines] for each stream + group headers
-    const sel = selectedIndex ?? 0;
+    const sel = selectedIndex;
 
     // Start from selected, expand outward until we fill maxLines
     visibleSet = new Set<number>();
