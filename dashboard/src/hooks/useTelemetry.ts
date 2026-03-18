@@ -288,17 +288,26 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
     const repos = new Set<string>();
     const channels = new Set<string>();
 
-    // Read session summaries from all relevant dates
+    // Collect active buffer session IDs to avoid double-counting
+    const activeBufferIds = new Set<string>();
+    try {
+      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json'))) {
+        activeBufferIds.add(f.replace('.json', ''));
+      }
+    } catch {}
+
+    // Read session summaries from all relevant dates (skip if buffer exists)
     for (const d of datesToRead) {
     const sessionsDir = path.join(baseDir, 'sessions', d);
     if (fs.existsSync(sessionsDir)) {
       const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
       for (const file of files) {
+        const sessionId = file.replace('.json', '');
+        if (activeBufferIds.has(sessionId)) continue; // buffer takes precedence
         const summary = readSessionSummary(path.join(sessionsDir, file));
         if (!summary) continue;
         const st = summary.tokens || {};
         totalTokens += st.total || 0;
-        // Recalculate cost from raw tokens (baked cost is often $0 due to null model)
         totalCost += (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
                      (st.cache_read || 0) / 1000 * 0.0005 + (st.cache_write || 0) / 1000 * 0.00625;
         if (summary.context?.repo) repos.add(summary.context.repo);
