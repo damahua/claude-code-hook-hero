@@ -305,13 +305,13 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
         totalFailures += stream.failures;
         if (stream.tokens) {
           totalTokens += stream.tokens.input + stream.tokens.output;
-          // Estimate cost using opus rates as default (most common model)
+          // Estimate cost using opus rates
           const t = stream.tokens;
           totalCost +=
-            (t.input / 1000) * 0.015 +
-            (t.output / 1000) * 0.075 +
-            (t.cache_read / 1000) * 0.00375 +
-            (t.cache_write / 1000) * 0.01875;
+            (t.input / 1000) * 0.005 +
+            (t.output / 1000) * 0.025 +
+            (t.cache_read / 1000) * 0.0005 +
+            (t.cache_write / 1000) * 0.00625;
         }
       }
     }

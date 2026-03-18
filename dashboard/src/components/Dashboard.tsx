@@ -150,8 +150,9 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
 
       if (item.kind === 'group') {
         // Toggle group collapse
+        const wasCollapsed = effectiveCollapsed.has(item.project);
         setCollapsedGroups(prev => {
-          const next = new Set(prev);
+          const next = new Set(prev ?? []);
           if (next.has(item.project)) {
             next.delete(item.project);
           } else {
@@ -159,6 +160,10 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
           }
           return next;
         });
+        // When expanding, move cursor to first stream in the group
+        if (wasCollapsed) {
+          setCursorIdx(cursorIdx + 1);
+        }
       } else {
         // Stream: expand done streams first, then detail view
         const stream = item.stream;

@@ -213,8 +213,8 @@ interface GroupSummary {
 }
 
 function estimateCost(t: { input: number; output: number; cache_read: number; cache_write: number }): number {
-  return (t.input / 1000) * 0.015 + (t.output / 1000) * 0.075 +
-         (t.cache_read / 1000) * 0.00375 + (t.cache_write / 1000) * 0.01875;
+  return (t.input / 1000) * 0.005 + (t.output / 1000) * 0.025 +
+         (t.cache_read / 1000) * 0.0005 + (t.cache_write / 1000) * 0.00625;
 }
 
 function formatCost(usd: number): string {
