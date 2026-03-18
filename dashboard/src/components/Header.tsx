@@ -13,7 +13,7 @@ export function Header({ mode }: { mode: 'live' | 'history' }) {
   const [frame, setFrame] = useState(0);
 
   useEffect(() => {
-    const timer = setInterval(() => setFrame(f => (f + 1) % SPARKLE.length), 400);
+    const timer = setInterval(() => setFrame(f => (f + 1) % SPARKLE.length), 2000);
     return () => clearInterval(timer);
   }, []);
 

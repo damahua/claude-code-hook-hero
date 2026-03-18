@@ -83,7 +83,7 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
 
   useEffect(() => {
     if (!stream.active || stream.idle) return;
-    const timer = setInterval(() => setFrame(f => (f + 1) % SPIN.length), 80);
+    const timer = setInterval(() => setFrame(f => (f + 1) % SPIN.length), 500);
     return () => clearInterval(timer);
   }, [stream.active, stream.idle]);
 

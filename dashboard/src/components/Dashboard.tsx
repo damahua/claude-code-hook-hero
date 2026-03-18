@@ -62,7 +62,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
 
   useEffect(() => {
     if (mode !== 'live') return;
-    const timer = setInterval(() => setElapsed(e => e + 1), 1000);
+    const timer = setInterval(() => setElapsed(e => e + 5), 5000);
     return () => clearInterval(timer);
   }, [mode]);
 
@@ -299,16 +299,18 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         </Box>
       )}
 
-      {/* Streams */}
-      <EventStream
-        streams={filteredStreams}
-        width={termWidth - 4}
-        selectedIndex={selectedIndex}
-        expandedIds={expandedIds}
-        collapsedGroups={effectiveCollapsed}
-        selectedGroup={selectedGroup}
-        maxStreamsPerGroup={Math.max(3, Math.floor((termHeight - 12) / 3))}
-      />
+      {/* Streams — flexGrow fills remaining terminal height, overflow clipped */}
+      <Box flexGrow={1} flexDirection="column" overflow="hidden">
+        <EventStream
+          streams={filteredStreams}
+          width={termWidth - 4}
+          selectedIndex={selectedIndex}
+          expandedIds={expandedIds}
+          collapsedGroups={effectiveCollapsed}
+          selectedGroup={selectedGroup}
+          maxStreamsPerGroup={Math.max(3, Math.floor((termHeight - 12) / 3))}
+        />
+      </Box>
 
       {/* Footer */}
       <Box paddingLeft={1}>
