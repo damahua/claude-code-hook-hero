@@ -157,6 +157,8 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
             <Text color="#484f58"> · </Text>
             <Text color="#d29922">{formatTokens(stream.tokens.input + stream.tokens.output)}</Text>
             <Text color="#6e7681"> tok</Text>
+            <Text color="#484f58"> · </Text>
+            <Text color="#d29922" bold>{formatCost(estimateCost(stream.tokens))}</Text>
           </>
         )}
         {stream.debugEnabled && (
@@ -207,24 +209,40 @@ interface GroupSummary {
   totalOps: number;
   totalFailures: number;
   totalTokens: number;
+  totalCost: number;
+}
+
+function estimateCost(t: { input: number; output: number; cache_read: number; cache_write: number }): number {
+  return (t.input / 1000) * 0.015 + (t.output / 1000) * 0.075 +
+         (t.cache_read / 1000) * 0.00375 + (t.cache_write / 1000) * 0.01875;
+}
+
+function formatCost(usd: number): string {
+  if (usd === 0) return '';
+  if (usd < 0.01) return '<$0.01';
+  return `$${usd.toFixed(2)}`;
 }
 
 function computeGroupSummary(streams: AgentStream[]): GroupSummary {
   let totalOps = 0;
   let totalFailures = 0;
   let totalTokens = 0;
+  let totalCost = 0;
   let active = 0;
   let idle = 0;
   let done = 0;
   for (const s of streams) {
     totalOps += Object.values(s.toolCounts).reduce((a, b) => a + b, 0);
     totalFailures += s.failures;
-    if (s.tokens) totalTokens += s.tokens.input + s.tokens.output;
+    if (s.tokens) {
+      totalTokens += s.tokens.input + s.tokens.output;
+      totalCost += estimateCost(s.tokens);
+    }
     if (s.done) done++;
     else if (s.idle) idle++;
     else active++;
   }
-  return { total: streams.length, active, idle, done, totalOps, totalFailures, totalTokens };
+  return { total: streams.length, active, idle, done, totalOps, totalFailures, totalTokens, totalCost };
 }
 
 interface EventStreamProps {
@@ -302,6 +320,12 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
                     <>
                       <Text color="#484f58"> · </Text>
                       <Text color="#d29922">{formatTokens(summary.totalTokens)} tok</Text>
+                    </>
+                  )}
+                  {summary.totalCost > 0 && (
+                    <>
+                      <Text color="#484f58"> · </Text>
+                      <Text color="#d29922" bold>{formatCost(summary.totalCost)}</Text>
                     </>
                   )}
                 </Box>
