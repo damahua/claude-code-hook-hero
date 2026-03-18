@@ -250,7 +250,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   }
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" height={termHeight}>
       <Header mode={mode} />
 
       {/* Stats bar */}
@@ -307,6 +307,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         expandedIds={expandedIds}
         collapsedGroups={effectiveCollapsed}
         selectedGroup={selectedGroup}
+        maxStreamsPerGroup={Math.max(3, Math.floor((termHeight - 12) / 3))}
       />
 
       {/* Footer */}

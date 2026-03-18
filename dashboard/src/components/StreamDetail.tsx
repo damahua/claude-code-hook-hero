@@ -85,7 +85,7 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
   const totalItems = timeline.length;
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" height={height}>
       {/* Back hint + stream title */}
       <Box>
         <Text color="#484f58">esc </Text>
