@@ -187,6 +187,7 @@ export interface TelemetryState {
   allTimeTokens: number;
   allTimeCost: number;
   totalSessions: number;
+  totalPrompts: number;
   totalTools: number;
   totalFailures: number;
   toolCounts: Record<string, number>;
@@ -202,6 +203,7 @@ const EMPTY_STATE: TelemetryState = {
   allTimeTokens: 0,
   allTimeCost: 0,
   totalSessions: 0,
+  totalPrompts: 0,
   totalTools: 0,
   totalFailures: 0,
   toolCounts: {},
@@ -317,6 +319,7 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       : 0) + activeSessions;
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
+    const totalPrompts = streams.reduce((s, st) => s + st.promptCount, 0);
 
     // All-time stats (finalized sessions across all dates + active streams)
     const allTime = computeAllTimeStats(baseDir);
@@ -342,6 +345,7 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       allTimeTokens,
       allTimeCost,
       totalSessions,
+      totalPrompts,
       totalTools,
       totalFailures,
       toolCounts,
@@ -435,6 +439,7 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
     const streams = Array.from(streamsMap.values());
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
+    const totalPrompts = streams.reduce((s, st) => s + st.promptCount, 0);
     const allTime = computeAllTimeStats(baseDir || DEFAULT_BASE);
 
     setState({
@@ -444,6 +449,7 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
       allTimeTokens: allTime.tokens,
       allTimeCost: allTime.cost,
       totalSessions: summaries.length,
+      totalPrompts,
       totalTools,
       totalFailures,
       toolCounts,
