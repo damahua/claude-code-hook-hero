@@ -127,9 +127,9 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
     <Box flexDirection="column">
       {/* Header line */}
       <Box>
-        <Text color={selected ? '#58a6ff' : '#30363d'}>{selected ? '▸' : ' '}</Text>
+        <Text color={selected ? '#58a6ff' : '#30363d'}>{selected ? '>' : ' '}</Text>
         <Text color={statusColor}>{statusChar} </Text>
-        <Text color={isCli ? '#6e7681' : '#06b6d4'}>{isCli ? '⚡' : '◈'} </Text>
+        <Text color={isCli ? '#6e7681' : '#06b6d4'}>{isCli ? '$' : '#'} </Text>
         {project && (
           <>
             <Text color="#d2a8ff" bold={!stream.done && !stream.idle}>{project}</Text>
@@ -160,7 +160,7 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
           </>
         )}
         {stream.debugEnabled && (
-          <Text color="#f59e0b"> [DEBUG]</Text>
+          <Text color="#f59e0b"> *DEBUG*</Text>
         )}
         {collapsed && totalTools > 0 && (
           <Text color="#484f58"> ›››</Text>
@@ -280,8 +280,8 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
             if (isGroupCollapsed) {
               return (
                 <Box key={project}>
-                  <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '▸' : ' '}</Text>
-                  <Text color="#d2a8ff" bold>▶ {project}</Text>
+                  <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '>' : ' '}</Text>
+                  <Text color="#d2a8ff" bold>[+] {project}</Text>
                   <Text color="#484f58"> · </Text>
                   <Text color="#6e7681">{summary.total} sess</Text>
                   {summary.active > 0 && (
@@ -312,8 +312,8 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
             return (
               <Box key={project} flexDirection="column">
                 <Box>
-                  <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '▸' : ' '}</Text>
-                  <Text color="#d2a8ff" bold>▼ {project}</Text>
+                  <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '>' : ' '}</Text>
+                  <Text color="#d2a8ff" bold>[-] {project}</Text>
                   <Text color="#484f58"> · </Text>
                   <Text color="#6e7681">{summary.total} sess</Text>
                   {summary.active > 0 && (

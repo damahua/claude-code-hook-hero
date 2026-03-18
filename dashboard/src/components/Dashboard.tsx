@@ -55,7 +55,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   const [elapsed, setElapsed] = useState(0);
   const [cursorIdx, setCursorIdx] = useState(0);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string> | null>(null);
   const [detailStreamId, setDetailStreamId] = useState<string | null>(null);
   const [detailScroll, setDetailScroll] = useState(0);
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
@@ -69,6 +69,14 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   const allProjects = Array.from(new Set(
     data.streams.map(s => getProject(s))
   )).sort();
+
+  // Start collapsed — initialize once we have projects
+  const effectiveCollapsed = collapsedGroups ?? new Set(allProjects);
+  useEffect(() => {
+    if (collapsedGroups === null && allProjects.length > 0) {
+      setCollapsedGroups(new Set(allProjects));
+    }
+  }, [allProjects.length, collapsedGroups]);
 
   const filteredStreams = projectFilter
     ? data.streams.filter(s => getProject(s) === projectFilter)
@@ -88,14 +96,14 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     const items: NavItem[] = [];
     for (const [project, streams] of groups) {
       items.push({ kind: 'group', project, streams });
-      if (!collapsedGroups.has(project)) {
+      if (!effectiveCollapsed.has(project)) {
         for (const stream of streams) {
           items.push({ kind: 'stream', stream, project });
         }
       }
     }
     return items;
-  }, [sorted, collapsedGroups]);
+  }, [sorted, effectiveCollapsed]);
 
   // Keep cursor in bounds
   useEffect(() => {
@@ -247,10 +255,10 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         <Text color="#6e7681"> sess </Text>
         <Text color="#484f58">│ </Text>
         <Text color="#06b6d4">{data.interactivePrompts}</Text>
-        <Text color="#6e7681">◈</Text>
+        <Text color="#6e7681"># </Text>
         <Text color="#484f58">/</Text>
-        <Text color="#6e7681">{data.cliPrompts}</Text>
-        <Text color="#6e7681">⚡ msgs </Text>
+        <Text color="#6e7681"> {data.cliPrompts}</Text>
+        <Text color="#6e7681">$ msgs </Text>
         <Text color="#484f58">│ </Text>
         <Text color="#e6edf3" bold>{data.totalTools}</Text>
         <Text color="#6e7681"> ops </Text>
@@ -292,7 +300,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         width={termWidth - 4}
         selectedIndex={selectedIndex}
         expandedIds={expandedIds}
-        collapsedGroups={collapsedGroups}
+        collapsedGroups={effectiveCollapsed}
         selectedGroup={selectedGroup}
       />
 

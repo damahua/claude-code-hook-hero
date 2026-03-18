@@ -7,7 +7,7 @@ const LOGO = [
   ' ╩ ╩╚═╝╚═╝╩ ╩  ╩ ╩╚═╝╩╚═╚═╝',
 ];
 
-const SPARKLE = ['✦', '✧', '⋆', '✦', '✧', '⋆'];
+const SPARKLE = ['*', '+', '.', '*', '+', '.'];
 
 export function Header({ mode }: { mode: 'live' | 'history' }) {
   const [frame, setFrame] = useState(0);
