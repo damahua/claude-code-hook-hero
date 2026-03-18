@@ -187,7 +187,8 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
 export interface TelemetryState {
   streams: AgentStream[];
   totalTokens: number;
-  totalCost: number;
+  todayCost: number;
+  activeCost: number;
   allTimeTokens: number;
   allTimeCost: number;
   totalSessions: number;
@@ -205,7 +206,8 @@ export interface TelemetryState {
 const EMPTY_STATE: TelemetryState = {
   streams: [],
   totalTokens: 0,
-  totalCost: 0,
+  todayCost: 0,
+  activeCost: 0,
   allTimeTokens: 0,
   allTimeCost: 0,
   totalSessions: 0,
@@ -281,8 +283,9 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
     const streams = Array.from(streamsMap.values());
 
     // Aggregate stats
+    let todayCost = 0;   // only sessions finalized today
+    let activeCost = 0;  // cumulative cost of running sessions
     let totalTokens = 0;
-    let totalCost = 0;
     const toolCounts: Record<string, number> = {};
     let totalFailures = 0;
     const repos = new Set<string>();
@@ -296,20 +299,23 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       }
     } catch {}
 
-    // Read session summaries from all relevant dates (skip if buffer exists)
+    // Read session summaries — only TODAY's for todayCost
     for (const d of datesToRead) {
     const sessionsDir = path.join(baseDir, 'sessions', d);
     if (fs.existsSync(sessionsDir)) {
       const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
       for (const file of files) {
         const sessionId = file.replace('.json', '');
-        if (activeBufferIds.has(sessionId)) continue; // buffer takes precedence
+        if (activeBufferIds.has(sessionId)) continue;
         const summary = readSessionSummary(path.join(sessionsDir, file));
         if (!summary) continue;
         const st = summary.tokens || {};
         totalTokens += st.total || 0;
-        totalCost += (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
+        const cost = (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
                      (st.cache_read || 0) / 1000 * 0.0005 + (st.cache_write || 0) / 1000 * 0.00625;
+        if (d === date) {
+          todayCost += cost;
+        }
         if (summary.context?.repo) repos.add(summary.context.repo);
         if (summary.channel) channels.add(summary.channel);
         if (summary.tools?.by_type) {
@@ -332,9 +338,8 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
         totalFailures += stream.failures;
         if (stream.tokens) {
           totalTokens += stream.tokens.input + stream.tokens.output;
-          // Estimate cost using opus rates
           const t = stream.tokens;
-          totalCost +=
+          activeCost +=
             (t.input / 1000) * 0.005 +
             (t.output / 1000) * 0.025 +
             (t.cache_read / 1000) * 0.0005 +
@@ -386,7 +391,8 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
     setState({
       streams,
       totalTokens,
-      totalCost,
+      todayCost,
+      activeCost,
       allTimeTokens,
       allTimeCost,
       totalSessions,
@@ -511,7 +517,8 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
     setState({
       streams,
       totalTokens,
-      totalCost,
+      todayCost: totalCost,
+      activeCost: 0,
       allTimeTokens: allTime.tokens,
       allTimeCost: allTime.cost,
       totalSessions: summaries.length,

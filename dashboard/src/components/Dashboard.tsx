@@ -275,7 +275,14 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
           </>
         )}
         <Text color="#484f58">│ </Text>
-        <Text color="#d29922">{formatCost(data.totalCost)}</Text>
+        <Text color="#d29922">{formatCost(data.todayCost)}</Text>
+        {data.activeCost > 0 && (
+          <>
+            <Text color="#484f58"> │ </Text>
+            <Text color="#6e7681">active </Text>
+            <Text color="#d29922">{formatCost(data.activeCost)}</Text>
+          </>
+        )}
         {mode === 'live' && (
           <>
             <Text color="#484f58"> │ </Text>
