@@ -261,8 +261,11 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         <Text color="#e6edf3" bold>{data.totalSessions}</Text>
         <Text color="#6e7681"> sess </Text>
         <Text color="#484f58">│ </Text>
-        <Text color="#e6edf3" bold>{data.totalPrompts}</Text>
-        <Text color="#6e7681"> msgs </Text>
+        <Text color="#06b6d4">{data.interactivePrompts}</Text>
+        <Text color="#6e7681">◈</Text>
+        <Text color="#484f58">/</Text>
+        <Text color="#6e7681">{data.cliPrompts}</Text>
+        <Text color="#6e7681">⚡ msgs </Text>
         <Text color="#484f58">│ </Text>
         <Text color="#e6edf3" bold>{data.totalTools}</Text>
         <Text color="#6e7681"> ops </Text>

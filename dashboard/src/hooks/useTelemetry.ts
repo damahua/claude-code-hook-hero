@@ -188,6 +188,8 @@ export interface TelemetryState {
   allTimeCost: number;
   totalSessions: number;
   totalPrompts: number;
+  interactivePrompts: number;
+  cliPrompts: number;
   totalTools: number;
   totalFailures: number;
   toolCounts: Record<string, number>;
@@ -204,6 +206,8 @@ const EMPTY_STATE: TelemetryState = {
   allTimeCost: 0,
   totalSessions: 0,
   totalPrompts: 0,
+  interactivePrompts: 0,
+  cliPrompts: 0,
   totalTools: 0,
   totalFailures: 0,
   toolCounts: {},
@@ -320,6 +324,10 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
     const totalPrompts = streams.reduce((s, st) => s + st.promptCount, 0);
+    const cliPrompts = streams
+      .filter(st => st.done && st.promptCount <= 1)
+      .reduce((s, st) => s + st.promptCount, 0);
+    const interactivePrompts = totalPrompts - cliPrompts;
 
     // All-time stats (finalized sessions across all dates + active streams)
     const allTime = computeAllTimeStats(baseDir);
@@ -346,6 +354,8 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       allTimeCost,
       totalSessions,
       totalPrompts,
+      interactivePrompts,
+      cliPrompts,
       totalTools,
       totalFailures,
       toolCounts,
@@ -440,6 +450,10 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
     const totalPrompts = streams.reduce((s, st) => s + st.promptCount, 0);
+    const cliPromptsH = streams
+      .filter(st => st.done && st.promptCount <= 1)
+      .reduce((s, st) => s + st.promptCount, 0);
+    const interactivePromptsH = totalPrompts - cliPromptsH;
     const allTime = computeAllTimeStats(baseDir || DEFAULT_BASE);
 
     setState({
@@ -450,6 +464,8 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
       allTimeCost: allTime.cost,
       totalSessions: summaries.length,
       totalPrompts,
+      interactivePrompts: interactivePromptsH,
+      cliPrompts: cliPromptsH,
       totalTools,
       totalFailures,
       toolCounts,
