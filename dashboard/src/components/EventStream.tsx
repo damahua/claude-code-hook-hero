@@ -199,13 +199,6 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
   );
 }
 
-/** Estimate how many terminal lines a stream row takes */
-function estimateStreamLines(stream: AgentStream, collapsed: boolean = false): number {
-  if (collapsed || stream.idle || (stream.done && Object.keys(stream.toolCounts).length === 0)) return 1;
-  const hasTools = Object.keys(stream.toolCounts).length > 0;
-  return hasTools ? 3 : 2; // header + bar + optional tools
-}
-
 interface GroupSummary {
   total: number;
   active: number;
@@ -238,13 +231,12 @@ interface EventStreamProps {
   streams: AgentStream[];
   width?: number;
   selectedIndex?: number;
-  maxLines?: number;
   expandedIds?: Set<string>;
   collapsedGroups?: Set<string>;
   selectedGroup?: string | null;
 }
 
-export function EventStream({ streams, width = 55, selectedIndex, maxLines, expandedIds, collapsedGroups, selectedGroup }: EventStreamProps) {
+export function EventStream({ streams, width = 55, selectedIndex, expandedIds, collapsedGroups, selectedGroup }: EventStreamProps) {
   const sorted = sortStreams(streams);
 
   // Group by project
@@ -257,60 +249,6 @@ export function EventStream({ streams, width = 55, selectedIndex, maxLines, expa
     groups.get(project)!.streams.push(stream);
     groups.get(project)!.globalIndices.push(i);
   });
-
-  // If maxLines is set, compute which streams are visible (window around selected)
-  let visibleSet: Set<number> | null = null;
-  let hiddenAbove = 0;
-  let hiddenBelow = 0;
-
-  if (maxLines && maxLines > 0 && sorted.length > 0 && selectedIndex != null && selectedIndex >= 0) {
-    // Build line-cost array: [globalIndex, lines] for each stream + group headers
-    const sel = selectedIndex;
-
-    // Start from selected, expand outward until we fill maxLines
-    visibleSet = new Set<number>();
-    let usedLines = 0;
-
-    const isCollapsed = (s: AgentStream) => s.done && !(expandedIds?.has(s.id));
-
-    // Always include selected stream
-    visibleSet.add(sel);
-    usedLines += estimateStreamLines(sorted[sel]!, isCollapsed(sorted[sel]!)) + 1;
-
-    // Expand upward and downward alternately
-    let up = sel - 1;
-    let down = sel + 1;
-
-    while (usedLines < maxLines && (up >= 0 || down < sorted.length)) {
-      if (up >= 0) {
-        const cost = estimateStreamLines(sorted[up]!, isCollapsed(sorted[up]!));
-        const proj = extractProject(sorted[up]!.label) || 'unknown';
-        const prevProj = up + 1 < sorted.length ? (extractProject(sorted[up + 1]!.label) || 'unknown') : '';
-        const groupCost = proj !== prevProj ? 1 : 0;
-        if (usedLines + cost + groupCost <= maxLines) {
-          visibleSet.add(up);
-          usedLines += cost + groupCost;
-        }
-        up--;
-      }
-      if (down < sorted.length && usedLines < maxLines) {
-        const cost = estimateStreamLines(sorted[down]!, isCollapsed(sorted[down]!));
-        const proj = extractProject(sorted[down]!.label) || 'unknown';
-        const prevProj = down - 1 >= 0 ? (extractProject(sorted[down - 1]!.label) || 'unknown') : '';
-        const groupCost = proj !== prevProj ? 1 : 0;
-        if (usedLines + cost + groupCost <= maxLines) {
-          visibleSet.add(down);
-          usedLines += cost + groupCost;
-        }
-        down++;
-      }
-      // Safety: if neither direction added, break
-      if (!visibleSet.has(up + 1) && !visibleSet.has(down - 1)) break;
-    }
-
-    hiddenAbove = sorted.slice(0, Math.min(...visibleSet)).filter((_, i) => !visibleSet!.has(i)).length;
-    hiddenBelow = sorted.slice(Math.max(...visibleSet) + 1).length;
-  }
 
   const activeCount = streams.filter(s => s.active && !s.idle).length;
   const idleCount = streams.filter(s => s.idle).length;
@@ -326,12 +264,6 @@ export function EventStream({ streams, width = 55, selectedIndex, maxLines, expa
         <Text color="#484f58">, {sorted.length} total)</Text>
         <Text color="#30363d"> {'─'.repeat(Math.max(1, width - 36))}</Text>
       </Box>
-
-      {hiddenAbove > 0 && (
-        <Box paddingLeft={2}>
-          <Text color="#484f58">↑ {hiddenAbove} more</Text>
-        </Box>
-      )}
 
       {sorted.length === 0 ? (
         <Box paddingY={1} paddingLeft={2}>
@@ -349,7 +281,7 @@ export function EventStream({ streams, width = 55, selectedIndex, maxLines, expa
               return (
                 <Box key={project}>
                   <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '▸' : ' '}</Text>
-                  <Text color="#d2a8ff" bold>{isGroupCollapsed ? '▶' : '▼'} {project}</Text>
+                  <Text color="#d2a8ff" bold>▶ {project}</Text>
                   <Text color="#484f58"> · </Text>
                   <Text color="#6e7681">{summary.total} sess</Text>
                   {summary.active > 0 && (
@@ -377,11 +309,6 @@ export function EventStream({ streams, width = 55, selectedIndex, maxLines, expa
             }
 
             // Expanded group — show streams
-            const visibleStreams = group.streams.filter((_, j) =>
-              !visibleSet || visibleSet.has(group.globalIndices[j]!)
-            );
-            if (visibleStreams.length === 0 && !isGroupSelected) return null;
-
             return (
               <Box key={project} flexDirection="column">
                 <Box>
@@ -397,27 +324,18 @@ export function EventStream({ streams, width = 55, selectedIndex, maxLines, expa
                   )}
                   <Text color="#30363d"> {'─'.repeat(Math.max(1, width - project.length - 25))}</Text>
                 </Box>
-                {group.streams.map((stream, j) => {
-                  if (visibleSet && !visibleSet.has(group.globalIndices[j]!)) return null;
-                  return (
-                    <StreamRow
-                      key={stream.id}
-                      stream={stream}
-                      maxWidth={width}
-                      selected={selectedIndex === group.globalIndices[j]}
-                      collapsed={stream.done && !(expandedIds?.has(stream.id))}
-                    />
-                  );
-                })}
+                {group.streams.map((stream, j) => (
+                  <StreamRow
+                    key={stream.id}
+                    stream={stream}
+                    maxWidth={width}
+                    selected={selectedIndex === group.globalIndices[j]}
+                    collapsed={stream.done && !(expandedIds?.has(stream.id))}
+                  />
+                ))}
               </Box>
             );
           })}
-        </Box>
-      )}
-
-      {hiddenBelow > 0 && (
-        <Box paddingLeft={2}>
-          <Text color="#484f58">↓ {hiddenBelow} more</Text>
         </Box>
       )}
     </Box>

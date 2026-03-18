@@ -236,11 +236,8 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     );
   }
 
-  const chromeLines = 8 + (Object.keys(data.toolCounts).length > 0 ? 2 : 0);
-  const availableLines = termHeight - chromeLines;
-
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" height={termHeight}>
       <Header mode={mode} />
 
       {/* Stats bar */}
@@ -294,7 +291,6 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         streams={filteredStreams}
         width={termWidth - 4}
         selectedIndex={selectedIndex}
-        maxLines={availableLines}
         expandedIds={expandedIds}
         collapsedGroups={collapsedGroups}
         selectedGroup={selectedGroup}
