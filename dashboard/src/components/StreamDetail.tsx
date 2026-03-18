@@ -5,7 +5,7 @@ import type { AgentStream, StreamEvent } from './EventStream.js';
 
 export interface DebugEntry {
   ts: string;
-  type: 'tool_input' | 'tool_result' | 'tool_error' | 'assistant_message' | 'thinking';
+  type: 'tool_input' | 'tool_result' | 'tool_error' | 'assistant_message' | 'thinking' | 'user_prompt';
   tool?: string;
   tool_use_id?: string;
   input?: Record<string, any>;
@@ -232,6 +232,11 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
                 {d.type === 'assistant_message' && d.text && (
                   <Box paddingLeft={4}>
                     <Text color="#c9d1d9" wrap="truncate-end">{d.text.slice(0, maxLen)}</Text>
+                  </Box>
+                )}
+                {d.type === 'user_prompt' && d.text && (
+                  <Box paddingLeft={4}>
+                    <Text color="#79c0ff" wrap="truncate-end">{d.text.slice(0, maxLen)}</Text>
                   </Box>
                 )}
               </Box>
