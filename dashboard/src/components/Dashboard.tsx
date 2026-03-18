@@ -253,16 +253,16 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     <Box flexDirection="column" height={termHeight}>
       <Header mode={mode} />
 
-      {/* Stats bar */}
+      {/* Stats — two lines to avoid wrapping */}
       <Box paddingLeft={1}>
         <Text color="#6e7681">today </Text>
         <Text color="#e6edf3" bold>{data.totalSessions}</Text>
         <Text color="#6e7681"> sess </Text>
         <Text color="#484f58">│ </Text>
         <Text color="#06b6d4">{data.interactivePrompts}</Text>
-        <Text color="#6e7681"># </Text>
+        <Text color="#6e7681">#</Text>
         <Text color="#484f58">/</Text>
-        <Text color="#6e7681"> {data.cliPrompts}</Text>
+        <Text color="#6e7681">{data.cliPrompts}</Text>
         <Text color="#6e7681">$ msgs </Text>
         <Text color="#484f58">│ </Text>
         <Text color="#e6edf3" bold>{data.totalTools}</Text>
@@ -275,9 +275,6 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
           </>
         )}
         <Text color="#484f58">│ </Text>
-        <Text color="#c9d1d9">{formatTokens(data.totalTokens)}</Text>
-        <Text color="#6e7681"> tok </Text>
-        <Text color="#484f58">│ </Text>
         <Text color="#d29922">{formatCost(data.totalCost)}</Text>
         {mode === 'live' && (
           <>
@@ -285,17 +282,16 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
             <Text color="#6e7681">{formatUptime(elapsed)}</Text>
           </>
         )}
-        <Text color="#484f58"> │ </Text>
+      </Box>
+      <Box paddingLeft={1}>
         <Text color="#6e7681">all time </Text>
-        <Text color="#c9d1d9">{formatTokens(data.allTimeTokens)}</Text>
-        <Text color="#6e7681"> tok </Text>
         <Text color="#d29922">{formatCost(data.allTimeCost)}</Text>
       </Box>
 
       {/* Tool breakdown */}
       {Object.keys(data.toolCounts).length > 0 && (
         <Box paddingLeft={1}>
-          <ToolBar tools={data.toolCounts} maxItems={8} />
+          <ToolBar tools={data.toolCounts} maxItems={Math.min(6, Math.floor(termWidth / 20))} />
         </Box>
       )}
 
