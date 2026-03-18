@@ -233,8 +233,10 @@ function computeAllTimeStats(baseDir: string): { tokens: number; cost: number } 
       for (const file of files) {
         try {
           const summary = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
-          tokens += summary.tokens?.total || 0;
-          cost += summary.tokens?.estimated_cost_usd || 0;
+          const st = summary.tokens || {};
+          tokens += st.total || 0;
+          cost += (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
+                  (st.cache_read || 0) / 1000 * 0.0005 + (st.cache_write || 0) / 1000 * 0.00625;
         } catch { /* skip malformed */ }
       }
     }
@@ -282,8 +284,11 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       for (const file of files) {
         const summary = readSessionSummary(path.join(sessionsDir, file));
         if (!summary) continue;
-        totalTokens += summary.tokens?.total || 0;
-        totalCost += summary.tokens?.estimated_cost_usd || 0;
+        const st = summary.tokens || {};
+        totalTokens += st.total || 0;
+        // Recalculate cost from raw tokens (baked cost is often $0 due to null model)
+        totalCost += (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
+                     (st.cache_read || 0) / 1000 * 0.0005 + (st.cache_write || 0) / 1000 * 0.00625;
         if (summary.context?.repo) repos.add(summary.context.repo);
         if (summary.channel) channels.add(summary.channel);
         if (summary.tools?.by_type) {
@@ -426,8 +431,11 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
         const summary = readSessionSummary(path.join(sessionsDir, file));
         if (!summary) continue;
         summaries.push(summary);
-        totalTokens += summary.tokens?.total || 0;
-        totalCost += summary.tokens?.estimated_cost_usd || 0;
+        const st = summary.tokens || {};
+        totalTokens += st.total || 0;
+        // Recalculate cost from raw tokens (baked cost is often $0 due to null model)
+        totalCost += (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
+                     (st.cache_read || 0) / 1000 * 0.0005 + (st.cache_write || 0) / 1000 * 0.00625;
         if (summary.context?.repo) repos.add(summary.context.repo);
         if (summary.channel) channels.add(summary.channel);
         if (summary.tools?.by_type) {
