@@ -155,9 +155,6 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
         {stream.tokens && (stream.tokens.input > 0 || stream.tokens.output > 0) && (
           <>
             <Text color="#484f58"> · </Text>
-            <Text color="#d29922">{formatTokens(stream.tokens.input + stream.tokens.output)}</Text>
-            <Text color="#6e7681"> tok</Text>
-            <Text color="#484f58"> · </Text>
             <Text color="#d29922" bold>{formatCost(estimateCost(stream.tokens))}</Text>
           </>
         )}
@@ -315,12 +312,6 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
                     <>
                       <Text color="#484f58"> · </Text>
                       <Text color="#f85149">{summary.totalFailures} err</Text>
-                    </>
-                  )}
-                  {summary.totalTokens > 0 && (
-                    <>
-                      <Text color="#484f58"> · </Text>
-                      <Text color="#d29922">{formatTokens(summary.totalTokens)} tok</Text>
                     </>
                   )}
                   {summary.totalCost > 0 && (
