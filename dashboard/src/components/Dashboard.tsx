@@ -250,7 +250,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   }
 
   return (
-    <Box flexDirection="column" height={termHeight}>
+    <Box flexDirection="column">
       <Header mode={mode} />
 
       {/* Stats bar */}
