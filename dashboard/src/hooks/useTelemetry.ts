@@ -58,7 +58,9 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
 
     if (!streams.has(streamId)) {
       const channel = (ev as any).channel;
-      const projectName = (ev as any).context?.project_name;
+      const ctx = (ev as any).context;
+      const projectName = ctx?.project_name
+        || (ctx?.cwd === os.homedir() ? '~' : ctx?.cwd ? path.basename(ctx.cwd) : null);
       const dirLabel = projectName ? ` [${projectName}]` : '';
       streams.set(streamId, {
         id: streamId,
@@ -89,7 +91,9 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
       stream.startTime = new Date(ev.ts).getTime();
       stream.endTime = undefined;
       const channel = (ev as any).channel;
-      const projectName = (ev as any).context?.project_name;
+      const ctx = (ev as any).context;
+      const projectName = ctx?.project_name
+        || (ctx?.cwd === os.homedir() ? '~' : ctx?.cwd ? path.basename(ctx.cwd) : null);
       const dirLabel = projectName ? ` [${projectName}]` : '';
       if (channel) {
         stream.channel = channel;
