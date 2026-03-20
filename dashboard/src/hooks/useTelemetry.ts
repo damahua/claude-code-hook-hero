@@ -222,8 +222,8 @@ function computeTimeDurations(streams: AgentStream[], startMs: number, endMs: nu
       }
     }
 
-    // If AI is currently working
-    if (lastPromptTime !== null) {
+    // If AI is currently working — only for active (not done) streams
+    if (lastPromptTime !== null && stream.active && !stream.done) {
       const from = Math.max(lastPromptTime, startMs);
       const to = Math.min(Date.now(), endMs);
       if (to > from) {
