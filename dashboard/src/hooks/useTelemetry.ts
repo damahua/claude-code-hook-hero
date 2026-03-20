@@ -403,12 +403,12 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       activeSessions = fs.readdirSync(bufferDir).filter(f => f.endsWith('.json')).length;
     }
 
-    // Count finalized sessions across all relevant dates
+    // Count finalized sessions — only today
     let finalizedSessions = 0;
-    for (const d of datesToRead) {
-      const sd = path.join(baseDir, 'sessions', d);
+    {
+      const sd = path.join(baseDir, 'sessions', date);
       if (fs.existsSync(sd)) {
-        finalizedSessions += fs.readdirSync(sd).filter(f => f.endsWith('.json')).length;
+        finalizedSessions = fs.readdirSync(sd).filter(f => f.endsWith('.json')).length;
       }
     }
     const totalSessions = finalizedSessions + activeSessions;
