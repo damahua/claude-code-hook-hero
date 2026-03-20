@@ -18,6 +18,16 @@ function formatCost(usd: number): string {
   return `$${usd.toFixed(2)}`;
 }
 
+function formatDuration(ms: number): string {
+  if (ms === 0) return '—';
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
 function formatTokens(n: number): string {
   if (n === 0) return '—';
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -291,6 +301,13 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         )}
       </Box>
       <Box paddingLeft={1}>
+        <Text color="#6e7681">time </Text>
+        <Text color="#58a6ff">{formatDuration(data.aiTimeMs)}</Text>
+        <Text color="#6e7681"> AI </Text>
+        <Text color="#484f58">+ </Text>
+        <Text color="#06b6d4">{formatDuration(data.humanTimeMs)}</Text>
+        <Text color="#6e7681"> you</Text>
+        <Text color="#484f58"> │ </Text>
         <Text color="#6e7681">all time </Text>
         <Text color="#d29922">{formatCost(data.allTimeCost)}</Text>
       </Box>

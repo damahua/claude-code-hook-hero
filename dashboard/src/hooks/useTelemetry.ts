@@ -188,6 +188,47 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
   return streams;
 }
 
+/** Compute AI time and human time from events across all streams */
+function computeTimeDurations(streams: AgentStream[]): { aiTimeMs: number; humanTimeMs: number } {
+  let aiTimeMs = 0;
+  let humanTimeMs = 0;
+
+  for (const stream of streams) {
+    let lastPromptTime: number | null = null;
+    let lastStopTime: number | null = null;
+
+    for (const ev of stream.events) {
+      const t = new Date(ev.ts).getTime();
+
+      if (ev.event === 'user_prompt') {
+        // Human time: gap between last stop and this prompt
+        if (lastStopTime !== null) {
+          const gap = t - lastStopTime;
+          // Cap at 10 min — longer gaps mean you walked away
+          if (gap < 10 * 60 * 1000) {
+            humanTimeMs += gap;
+          }
+        }
+        lastPromptTime = t;
+      } else if (ev.event === 'agent_stop') {
+        // AI time: from last prompt to this stop
+        if (lastPromptTime !== null) {
+          aiTimeMs += t - lastPromptTime;
+          lastPromptTime = null;
+        }
+        lastStopTime = t;
+      }
+    }
+
+    // If AI is currently working (prompt sent, no stop yet)
+    if (lastPromptTime !== null) {
+      aiTimeMs += Date.now() - lastPromptTime;
+    }
+  }
+
+  return { aiTimeMs, humanTimeMs };
+}
+
 export interface TelemetryState {
   streams: AgentStream[];
   totalTokens: number;
@@ -205,6 +246,8 @@ export interface TelemetryState {
   repos: string[];
   channels: string[];
   latestEvents: StreamEvent[];
+  aiTimeMs: number;
+  humanTimeMs: number;
 }
 
 const EMPTY_STATE: TelemetryState = {
@@ -224,6 +267,8 @@ const EMPTY_STATE: TelemetryState = {
   repos: [],
   channels: [],
   latestEvents: [],
+  aiTimeMs: 0,
+  humanTimeMs: 0,
 };
 
 /** Sum tokens and cost from all session summaries across all dates */
@@ -392,6 +437,8 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       }
     }
 
+    const { aiTimeMs, humanTimeMs } = computeTimeDurations(streams);
+
     setState({
       streams,
       totalTokens,
@@ -409,6 +456,8 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       repos: Array.from(repos),
       channels: Array.from(channels),
       latestEvents: allEvents.slice(-50),
+      aiTimeMs,
+      humanTimeMs,
     });
   }, [baseDir]);
 
@@ -535,6 +584,7 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
       repos: Array.from(repos),
       channels: Array.from(channels),
       latestEvents: allEvents.slice(-50),
+      ...computeTimeDurations(streams),
     });
   }, [baseDir, date]);
 
