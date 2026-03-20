@@ -348,7 +348,7 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       }
     } catch {}
 
-    // Read session summaries — only TODAY's for todayCost
+    // Read session summaries — today's for header stats, all dates for streams
     for (const d of datesToRead) {
     const sessionsDir = path.join(baseDir, 'sessions', d);
     if (fs.existsSync(sessionsDir)) {
@@ -358,21 +358,23 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
         if (activeBufferIds.has(sessionId)) continue;
         const summary = readSessionSummary(path.join(sessionsDir, file));
         if (!summary) continue;
-        const st = summary.tokens || {};
-        totalTokens += st.total || 0;
-        const cost = (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
-                     (st.cache_read || 0) / 1000 * 0.0005 + (st.cache_write || 0) / 1000 * 0.00625;
+
+        // Only count today's sessions for header stats
         if (d === date) {
-          todayCost += cost;
+          const st = summary.tokens || {};
+          totalTokens += st.total || 0;
+          todayCost += (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
+                       (st.cache_read || 0) / 1000 * 0.0005 + (st.cache_write || 0) / 1000 * 0.00625;
+          if (summary.tools?.by_type) {
+            for (const [tool, count] of Object.entries(summary.tools.by_type)) {
+              toolCounts[tool] = (toolCounts[tool] || 0) + (count as number);
+            }
+          }
+          totalFailures += summary.tools?.failures || 0;
         }
+
         if (summary.context?.repo) repos.add(summary.context.repo);
         if (summary.channel) channels.add(summary.channel);
-        if (summary.tools?.by_type) {
-          for (const [tool, count] of Object.entries(summary.tools.by_type)) {
-            toolCounts[tool] = (toolCounts[tool] || 0) + (count as number);
-          }
-        }
-        totalFailures += summary.tools?.failures || 0;
       }
     }
     } // end datesToRead loop
@@ -414,10 +416,39 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
     const totalSessions = finalizedSessions + activeSessions;
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
-    const totalPrompts = streams.reduce((s, st) => s + st.promptCount, 0);
-    const cliPrompts = streams
-      .filter(st => st.done && st.promptCount <= 1)
-      .reduce((s, st) => s + st.promptCount, 0);
+
+    // Count prompts from today's events only
+    const todayEventsDir = path.join(baseDir, 'events', date);
+    let totalPrompts = 0;
+    let cliPrompts = 0;
+    if (fs.existsSync(todayEventsDir)) {
+      for (const file of fs.readdirSync(todayEventsDir).filter(f => f.endsWith('.jsonl'))) {
+        let prompts = 0;
+        let hasEnd = false;
+        const lines = fs.readFileSync(path.join(todayEventsDir, file), 'utf-8').trim().split('\n');
+        for (const line of lines) {
+          try {
+            const ev = JSON.parse(line);
+            if (ev.event === 'user_prompt') prompts++;
+            if (ev.event === 'session_end') hasEnd = true;
+          } catch {}
+        }
+        totalPrompts += prompts;
+        if (hasEnd && prompts <= 1) cliPrompts += prompts;
+      }
+    }
+    // Add prompts from active streams that started today
+    for (const stream of streams) {
+      if (!stream.done) {
+        // Check if this stream's events are in today's dir (not old date)
+        const evFile = path.join(todayEventsDir, `${stream.id}.jsonl`);
+        if (!fs.existsSync(evFile)) {
+          // Active stream from old date — count its prompts too
+          totalPrompts += stream.promptCount;
+        }
+        // (today's active streams already counted above from the file scan)
+      }
+    }
     const interactivePrompts = totalPrompts - cliPrompts;
 
     // All-time stats (finalized sessions across all dates + active streams)
