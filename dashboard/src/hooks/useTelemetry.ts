@@ -29,7 +29,8 @@ function readSessionSummary(filePath: string): Record<string, any> | null {
   }
 }
 
-function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream> {
+function buildStreamsFromEvents(events: StreamEvent[], todayStartMs?: number): Map<string, AgentStream> {
+  const todayStart = todayStartMs ?? new Date(today() + 'T00:00:00').getTime();
   const streams = new Map<string, AgentStream>();
 
   for (const ev of events) {
@@ -76,6 +77,7 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
         events: [],
         toolCounts: {},
         failures: 0,
+        todayCost: 0,
         promptCount: 0,
         debugEnabled: false,
       });
@@ -115,9 +117,15 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
     }
 
     // Track token usage from agent_stop events (cumulative from transcript)
+    // Also track tokens-before-today for per-day cost calculation
     if (ev.event === 'agent_stop') {
       const tokens = (ev as any).tokens;
       if (tokens && (tokens.input > 0 || tokens.output > 0 || tokens.cache_read > 0 || tokens.cache_write > 0)) {
+        const evTime = new Date(ev.ts).getTime();
+        // Save last tokens snapshot before today
+        if (evTime < todayStart) {
+          (stream as any)._tokensBeforeToday = { ...tokens };
+        }
         stream.tokens = {
           input: tokens.input ?? 0,
           output: tokens.output ?? 0,
@@ -132,6 +140,23 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
       stream.active = false;
       stream.done = true;
       stream.endTime = new Date(ev.ts).getTime();
+    }
+  }
+
+  // Compute todayCost per stream: total cost - cost before today
+  const costFn = (t: any) => (t.input || 0) / 1000 * 0.005 + (t.output || 0) / 1000 * 0.025 +
+    (t.cache_read || 0) / 1000 * 0.0005 + (t.cache_write || 0) / 1000 * 0.00625;
+
+  for (const stream of streams.values()) {
+    if (stream.tokens) {
+      const totalCost = costFn(stream.tokens);
+      const beforeToday = (stream as any)._tokensBeforeToday;
+      if (beforeToday) {
+        stream.todayCost = Math.max(0, totalCost - costFn(beforeToday));
+      } else {
+        // Session started today — all cost is today's
+        stream.todayCost = totalCost;
+      }
     }
   }
 
@@ -334,12 +359,12 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
     // Sort by timestamp
     allEvents.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
 
-    const streamsMap = buildStreamsFromEvents(allEvents);
-    const streams = Array.from(streamsMap.values());
-
-    // Aggregate stats — all "today" metrics use timestamp-based filtering
+    // All "today" metrics use timestamp-based filtering
     const todayStart = new Date(date + 'T00:00:00').getTime();
     const todayEnd = todayStart + 24 * 60 * 60 * 1000;
+
+    const streamsMap = buildStreamsFromEvents(allEvents, todayStart);
+    const streams = Array.from(streamsMap.values());
     let todayCost = 0;
     let activeCost = 0;
     let totalTokens = 0;
@@ -593,7 +618,8 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
     }
     allEvents.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
 
-    const streamsMap = buildStreamsFromEvents(allEvents);
+    const targetStart = new Date((date || today()) + 'T00:00:00').getTime();
+    const streamsMap = buildStreamsFromEvents(allEvents, targetStart);
     const streams = Array.from(streamsMap.values());
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);

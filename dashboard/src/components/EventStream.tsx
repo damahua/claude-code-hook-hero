@@ -26,6 +26,7 @@ interface AgentStream {
   toolCounts: Record<string, number>;
   failures: number;
   tokens?: { input: number; output: number; cache_read: number; cache_write: number };
+  todayCost: number;
   promptCount: number;
   debugEnabled: boolean;
 }
@@ -155,7 +156,15 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
         {stream.tokens && (stream.tokens.input > 0 || stream.tokens.output > 0) && (
           <>
             <Text color="#484f58"> · </Text>
-            <Text color="#d29922" bold>{formatCost(estimateCost(stream.tokens))}</Text>
+            {stream.todayCost > 0 && stream.todayCost < estimateCost(stream.tokens) - 0.01 ? (
+              <>
+                <Text color="#d29922">{formatCost(stream.todayCost)}</Text>
+                <Text color="#484f58">/</Text>
+                <Text color="#d29922" bold>{formatCost(estimateCost(stream.tokens))}</Text>
+              </>
+            ) : (
+              <Text color="#d29922" bold>{formatCost(estimateCost(stream.tokens))}</Text>
+            )}
           </>
         )}
         {stream.debugEnabled && (
@@ -207,6 +216,7 @@ interface GroupSummary {
   totalFailures: number;
   totalTokens: number;
   totalCost: number;
+  todayCost: number;
 }
 
 function estimateCost(t: { input: number; output: number; cache_read: number; cache_write: number }): number {
@@ -225,6 +235,7 @@ function computeGroupSummary(streams: AgentStream[]): GroupSummary {
   let totalFailures = 0;
   let totalTokens = 0;
   let totalCost = 0;
+  let todayCost = 0;
   let active = 0;
   let idle = 0;
   let done = 0;
@@ -235,11 +246,12 @@ function computeGroupSummary(streams: AgentStream[]): GroupSummary {
       totalTokens += s.tokens.input + s.tokens.output;
       totalCost += estimateCost(s.tokens);
     }
+    todayCost += s.todayCost;
     if (s.done) done++;
     else if (s.idle) idle++;
     else active++;
   }
-  return { total: streams.length, active, idle, done, totalOps, totalFailures, totalTokens, totalCost };
+  return { total: streams.length, active, idle, done, totalOps, totalFailures, totalTokens, totalCost, todayCost };
 }
 
 interface EventStreamProps {
@@ -317,7 +329,15 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
                   {summary.totalCost > 0 && (
                     <>
                       <Text color="#484f58"> · </Text>
-                      <Text color="#d29922" bold>{formatCost(summary.totalCost)}</Text>
+                      {summary.todayCost > 0 && summary.todayCost < summary.totalCost - 0.01 ? (
+                        <>
+                          <Text color="#d29922">{formatCost(summary.todayCost)}</Text>
+                          <Text color="#484f58">/</Text>
+                          <Text color="#d29922" bold>{formatCost(summary.totalCost)}</Text>
+                        </>
+                      ) : (
+                        <Text color="#d29922" bold>{formatCost(summary.totalCost)}</Text>
+                      )}
                     </>
                   )}
                 </Box>
