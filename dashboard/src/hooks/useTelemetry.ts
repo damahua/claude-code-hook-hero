@@ -188,8 +188,8 @@ function buildStreamsFromEvents(events: StreamEvent[]): Map<string, AgentStream>
   return streams;
 }
 
-/** Compute AI time and human time from events across all streams */
-function computeTimeDurations(streams: AgentStream[]): { aiTimeMs: number; humanTimeMs: number } {
+/** Compute AI time and human time from events — only count time within [startMs, endMs) */
+function computeTimeDurations(streams: AgentStream[], startMs: number, endMs: number): { aiTimeMs: number; humanTimeMs: number } {
   let aiTimeMs = 0;
   let humanTimeMs = 0;
 
@@ -201,28 +201,34 @@ function computeTimeDurations(streams: AgentStream[]): { aiTimeMs: number; human
       const t = new Date(ev.ts).getTime();
 
       if (ev.event === 'user_prompt') {
-        // Human time: gap between last stop and this prompt
-        if (lastStopTime !== null) {
-          const gap = t - lastStopTime;
-          // Cap at 10 min — longer gaps mean you walked away
-          if (gap < 10 * 60 * 1000) {
+        if (lastStopTime !== null && t >= startMs && t < endMs) {
+          const gap = t - Math.max(lastStopTime, startMs);
+          if (gap > 0 && gap < 10 * 60 * 1000) {
             humanTimeMs += gap;
           }
         }
         lastPromptTime = t;
       } else if (ev.event === 'agent_stop') {
-        // AI time: from last prompt to this stop
         if (lastPromptTime !== null) {
-          aiTimeMs += t - lastPromptTime;
-          lastPromptTime = null;
+          // Clamp to today's range
+          const from = Math.max(lastPromptTime, startMs);
+          const to = Math.min(t, endMs);
+          if (to > from) {
+            aiTimeMs += to - from;
+          }
         }
+        lastPromptTime = null;
         lastStopTime = t;
       }
     }
 
-    // If AI is currently working (prompt sent, no stop yet)
+    // If AI is currently working
     if (lastPromptTime !== null) {
-      aiTimeMs += Date.now() - lastPromptTime;
+      const from = Math.max(lastPromptTime, startMs);
+      const to = Math.min(Date.now(), endMs);
+      if (to > from) {
+        aiTimeMs += to - from;
+      }
     }
   }
 
@@ -331,9 +337,11 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
     const streamsMap = buildStreamsFromEvents(allEvents);
     const streams = Array.from(streamsMap.values());
 
-    // Aggregate stats
-    let todayCost = 0;   // only sessions finalized today
-    let activeCost = 0;  // cumulative cost of running sessions
+    // Aggregate stats — all "today" metrics use timestamp-based filtering
+    const todayStart = new Date(date + 'T00:00:00').getTime();
+    const todayEnd = todayStart + 24 * 60 * 60 * 1000;
+    let todayCost = 0;
+    let activeCost = 0;
     let totalTokens = 0;
     const toolCounts: Record<string, number> = {};
     let totalFailures = 0;
@@ -348,7 +356,8 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       }
     } catch {}
 
-    // Read session summaries — today's for header stats, all dates for streams
+    // Read session summaries for repos/channels (all dates)
+    // Cost only from today's summaries
     for (const d of datesToRead) {
     const sessionsDir = path.join(baseDir, 'sessions', d);
     if (fs.existsSync(sessionsDir)) {
@@ -359,18 +368,11 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
         const summary = readSessionSummary(path.join(sessionsDir, file));
         if (!summary) continue;
 
-        // Only count today's sessions for header stats
         if (d === date) {
           const st = summary.tokens || {};
           totalTokens += st.total || 0;
           todayCost += (st.input || 0) / 1000 * 0.005 + (st.output || 0) / 1000 * 0.025 +
                        (st.cache_read || 0) / 1000 * 0.0005 + (st.cache_write || 0) / 1000 * 0.00625;
-          if (summary.tools?.by_type) {
-            for (const [tool, count] of Object.entries(summary.tools.by_type)) {
-              toolCounts[tool] = (toolCounts[tool] || 0) + (count as number);
-            }
-          }
-          totalFailures += summary.tools?.failures || 0;
         }
 
         if (summary.context?.repo) repos.add(summary.context.repo);
@@ -379,14 +381,23 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
     }
     } // end datesToRead loop
 
-    // Add stats from active streams (not yet finalized)
+    // Count ops, errors, tool counts by timestamp from raw events
+    for (const ev of allEvents) {
+      const t = new Date(ev.ts).getTime();
+      if (t < todayStart || t >= todayEnd) continue;
+      if (ev.event === 'tool_end' || ev.event === 'tool_failure') {
+        const tool = ev.tool || 'unknown';
+        toolCounts[tool] = (toolCounts[tool] || 0) + 1;
+      }
+      if (ev.event === 'tool_failure') {
+        totalFailures++;
+      }
+    }
+
+    // Add active stream cost
     for (const stream of streams) {
       if (!stream.done) {
         if (stream.channel) channels.add(stream.channel);
-        for (const [tool, count] of Object.entries(stream.toolCounts)) {
-          toolCounts[tool] = (toolCounts[tool] || 0) + count;
-        }
-        totalFailures += stream.failures;
         if (stream.tokens) {
           totalTokens += stream.tokens.input + stream.tokens.output;
           const t = stream.tokens;
@@ -417,37 +428,32 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
 
     const totalTools = Object.values(toolCounts).reduce((s, c) => s + c, 0);
 
-    // Count prompts from today's events only
-    const todayEventsDir = path.join(baseDir, 'events', date);
+    // Count prompts by timestamp — only events that happened today
     let totalPrompts = 0;
     let cliPrompts = 0;
-    if (fs.existsSync(todayEventsDir)) {
-      for (const file of fs.readdirSync(todayEventsDir).filter(f => f.endsWith('.jsonl'))) {
-        let prompts = 0;
-        let hasEnd = false;
-        const lines = fs.readFileSync(path.join(todayEventsDir, file), 'utf-8').trim().split('\n');
-        for (const line of lines) {
-          try {
-            const ev = JSON.parse(line);
-            if (ev.event === 'user_prompt') prompts++;
-            if (ev.event === 'session_end') hasEnd = true;
-          } catch {}
+
+    // Per-session prompt counts for CLI detection
+    const sessionPrompts = new Map<string, { count: number; done: boolean }>();
+    for (const ev of allEvents) {
+      const t = new Date(ev.ts).getTime();
+      if (t < todayStart || t >= todayEnd) continue;
+      const sid = (ev as any).session_id;
+      if (ev.event === 'user_prompt') {
+        totalPrompts++;
+        if (sid) {
+          const s = sessionPrompts.get(sid) || { count: 0, done: false };
+          s.count++;
+          sessionPrompts.set(sid, s);
         }
-        totalPrompts += prompts;
-        if (hasEnd && prompts <= 1) cliPrompts += prompts;
+      }
+      if (ev.event === 'session_end' && sid) {
+        const s = sessionPrompts.get(sid) || { count: 0, done: false };
+        s.done = true;
+        sessionPrompts.set(sid, s);
       }
     }
-    // Add prompts from active streams that started today
-    for (const stream of streams) {
-      if (!stream.done) {
-        // Check if this stream's events are in today's dir (not old date)
-        const evFile = path.join(todayEventsDir, `${stream.id}.jsonl`);
-        if (!fs.existsSync(evFile)) {
-          // Active stream from old date — count its prompts too
-          totalPrompts += stream.promptCount;
-        }
-        // (today's active streams already counted above from the file scan)
-      }
+    for (const s of sessionPrompts.values()) {
+      if (s.done && s.count <= 1) cliPrompts += s.count;
     }
     const interactivePrompts = totalPrompts - cliPrompts;
 
@@ -468,7 +474,7 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
       }
     }
 
-    const { aiTimeMs, humanTimeMs } = computeTimeDurations(streams);
+    const { aiTimeMs, humanTimeMs } = computeTimeDurations(streams, todayStart, todayEnd);
 
     setState({
       streams,
@@ -615,7 +621,7 @@ export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: strin
       repos: Array.from(repos),
       channels: Array.from(channels),
       latestEvents: allEvents.slice(-50),
-      ...computeTimeDurations(streams),
+      ...computeTimeDurations(streams, new Date((date || today()) + 'T00:00:00').getTime(), new Date((date || today()) + 'T00:00:00').getTime() + 86400000),
     });
   }, [baseDir, date]);
 
