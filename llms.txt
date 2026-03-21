@@ -1,0 +1,53 @@
+# Hook Hero
+
+> Agent telemetry plugin for Claude Code. Captures structured events from every session — tools, tokens, costs, git activity, subagents — with msgpack compression and optional encryption.
+
+## What is Hook Hero?
+
+Hook Hero is an open-source Claude Code plugin that captures structured telemetry from every Claude Code and Claude CLI session. It registers 14 lifecycle hooks that automatically record tool usage, token consumption, cost estimates, git activity, subagent orchestration, and more.
+
+## Key Features
+
+- 14 hooks: SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, PostToolUseFailure, Stop, SubagentStart, SubagentStop, PreCompact, PostCompact, WorktreeCreate, WorktreeRemove, TaskCompleted
+- Real-time terminal dashboard (Ink-powered) with live session monitoring, project grouping, keyboard navigation
+- AI-powered session analysis: press 'a' to ask Claude about any session's telemetry
+- MessagePack with custom dictionary compression: 47% smaller event files (56 static codes + per-session dynamic codes)
+- Optional AES-256-GCM encryption with auto-generated keyfile or environment variable
+- Cost tracking with auto-updated pricing from Anthropic (supports Opus, Sonnet, Haiku across all versions)
+- Git-aware: tracks commits, PRs, branches, insertions, deletions per session
+- Subagent observability: spawn tracking, duration, type breakdown
+- Export command: decrypt and export sessions as JSON for external analysis
+- Zero config: install the plugin, telemetry flows automatically
+- Configurable: switch between msgpack and JSON format, enable/disable encryption
+
+## Install
+
+```
+/plugin install hook-hero
+```
+
+## CLI Commands
+
+```
+hook-hero live                    # Real-time monitoring
+hook-hero history                 # Review today's sessions
+hook-hero history --date YYYY-MM-DD  # Review a specific date
+hook-hero export --session <id>   # Export session as JSON
+hook-hero export --session <id> --events  # Include decrypted event timeline
+hook-hero export --all            # Export all sessions
+```
+
+## Data Storage
+
+All data stays local at ~/.claude/hook-hero/. Nothing is sent externally.
+
+- sessions/{date}/{id}.json — Human-readable JSON session summaries
+- events/{date}/{id}.events — Compressed msgpack event logs (optionally encrypted)
+- buffer/{id}.buf — Active session state
+- debug/{date}/{id}.jsonl — Debug logs (opt-in)
+
+## Links
+
+- Source: https://github.com/damahua/claude-code-hook-hero
+- Website: https://hook-hero-web.vercel.app
+- License: MIT
