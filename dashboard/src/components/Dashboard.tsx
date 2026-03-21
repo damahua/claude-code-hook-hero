@@ -233,8 +233,9 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         if (fs.existsSync(debugPath)) {
           try { fs.unlinkSync(debugPath); } catch {}
         } else {
-          const bufPath = path.join(HOOK_HERO_BASE, 'buffer', `${stream.id}.json`);
-          if (fs.existsSync(bufPath)) {
+          const bufPathBuf = path.join(HOOK_HERO_BASE, 'buffer', `${stream.id}.buf`);
+          const bufPathJson = path.join(HOOK_HERO_BASE, 'buffer', `${stream.id}.json`);
+          if (fs.existsSync(bufPathBuf) || fs.existsSync(bufPathJson)) {
             fs.writeFileSync(debugPath, '');
           }
         }
