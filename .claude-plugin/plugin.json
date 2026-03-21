@@ -1,9 +1,10 @@
 {
   "name": "hook-hero",
-  "description": "Agent session telemetry for Claude Code — captures structured events from 14 hook lifecycle events, writing raw JSONL and aggregated JSON session summaries to ~/.claude/hook-hero/",
+  "version": "1.0.0",
+  "description": "Agent session telemetry for Claude Code — captures structured events from 14 hook lifecycle events with msgpack compression, optional encryption, and a real-time terminal dashboard.",
   "category": "observability",
   "author": {
-    "name": "Leo Zhang"
+    "name": "Le Zhang"
   },
   "homepage": "https://github.com/damahua/claude-code-hook-hero"
 }
