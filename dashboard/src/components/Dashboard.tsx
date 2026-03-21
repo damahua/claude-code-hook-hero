@@ -7,6 +7,7 @@ import { Header } from './Header.js';
 import { ToolBar } from './Panel.js';
 import { EventStream, sortStreams } from './EventStream.js';
 import { StreamDetail } from './StreamDetail.js';
+import { ChatPanel } from './ChatView.js';
 import type { DebugEntry } from './StreamDetail.js';
 import type { TelemetryState } from '../hooks/useTelemetry.js';
 import type { AgentStream } from './EventStream.js';
@@ -69,6 +70,8 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   const [detailStreamId, setDetailStreamId] = useState<string | null>(null);
   const [detailScroll, setDetailScroll] = useState(0);
   const [projectFilter, setProjectFilter] = useState<string | null>(null);
+  const [chatStreamId, setChatStreamId] = useState<string | null>(null);
+  const [chatFocused, setChatFocused] = useState(false);
 
   useEffect(() => {
     if (mode !== 'live') return;
@@ -132,6 +135,14 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   const selectedGroup = currentItem?.kind === 'group' ? currentItem.project : null;
 
   useInput((input, key) => {
+    // Tab toggles focus between main view and chat panel
+    if (key.tab && chatStreamId) {
+      setChatFocused(f => !f);
+      return;
+    }
+    // Chat panel handles its own input when focused
+    if (chatFocused) return;
+
     if (detailStream) {
       // Detail view
       if (key.escape || input === 'q') {
@@ -145,6 +156,9 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         setDetailScroll(0);
       } else if (input === 'G') {
         setDetailScroll(Math.max(0, detailStream.events.length - 10));
+      } else if (input === 'a') {
+        setChatStreamId(detailStream.id);
+        setChatFocused(true);
       }
       return;
     }
@@ -225,10 +239,21 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         return allProjects[idx + 1]!;
       });
       setCursorIdx(0);
+    } else if (input === 'a') {
+      const item = navItems[cursorIdx];
+      if (item?.kind === 'stream') {
+        setChatStreamId(item.stream.id);
+        setChatFocused(true);
+      }
     } else if (input === 'q') {
       process.exit(0);
     }
   });
+
+  // Resolve chat stream
+  const chatStream = chatStreamId ? sorted.find(s => s.id === chatStreamId) : null;
+  const chatPanelHeight = chatStream ? Math.max(8, Math.floor(termHeight * 0.35)) : 0;
+  const mainHeight = termHeight - chatPanelHeight;
 
   // Detail view
   if (detailStream) {
@@ -249,18 +274,32 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     } catch {}
 
     return (
-      <StreamDetail
-        stream={detailStream}
-        width={termWidth - 2}
-        height={termHeight}
-        scrollOffset={detailScroll}
-        debugEntries={debugEntries}
-      />
+      <Box flexDirection="column" height={termHeight}>
+        <Box flexDirection="column" height={mainHeight}>
+          <StreamDetail
+            stream={detailStream}
+            width={termWidth - 2}
+            height={mainHeight}
+            scrollOffset={detailScroll}
+            debugEntries={debugEntries}
+          />
+        </Box>
+        {chatStream && (
+          <ChatPanel
+            stream={chatStream}
+            width={termWidth - 2}
+            height={chatPanelHeight}
+            active={chatFocused}
+            onExit={() => { setChatStreamId(null); setChatFocused(false); }}
+          />
+        )}
+      </Box>
     );
   }
 
   return (
     <Box flexDirection="column" height={termHeight}>
+      <Box flexDirection="column" height={mainHeight}>
       <Header mode={mode} />
 
       {/* Stats — two lines to avoid wrapping */}
@@ -340,6 +379,8 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         <Text color="#8b949e"> expand </Text>
         <Text color="#c9d1d9" bold>esc</Text>
         <Text color="#8b949e"> collapse </Text>
+        <Text color="#c9d1d9" bold>a</Text>
+        <Text color="#8b949e"> ask AI </Text>
         <Text color="#c9d1d9" bold>d</Text>
         <Text color="#8b949e"> debug </Text>
         <Text color="#c9d1d9" bold>c</Text>
@@ -355,6 +396,16 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         <Text color="#c9d1d9" bold>q</Text>
         <Text color="#8b949e"> quit</Text>
       </Box>
+      </Box>
+      {chatStream && (
+        <ChatPanel
+          stream={chatStream}
+          width={termWidth - 2}
+          height={chatPanelHeight}
+          active={chatFocused}
+          onExit={() => { setChatStreamId(null); setChatFocused(false); }}
+        />
+      )}
     </Box>
   );
 }
