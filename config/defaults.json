@@ -1,8 +1,79 @@
 {
   "cost_rates": {
-    "claude-opus-4-6": { "input_per_1k": 0.005, "output_per_1k": 0.025, "cache_read_per_1k": 0.0005, "cache_write_per_1k": 0.00625 },
-    "claude-sonnet-4-6": { "input_per_1k": 0.003, "output_per_1k": 0.015, "cache_read_per_1k": 0.0003, "cache_write_per_1k": 0.00375 },
-    "claude-haiku-4-5": { "input_per_1k": 0.0008, "output_per_1k": 0.004, "cache_read_per_1k": 0.00008, "cache_write_per_1k": 0.001 }
+    "claude-opus-4-6": {
+      "input_per_1k": 0.005,
+      "output_per_1k": 0.025,
+      "cache_read_per_1k": 0.0005,
+      "cache_write_per_1k": 0.00625
+    },
+    "claude-opus-4-5": {
+      "input_per_1k": 0.005,
+      "output_per_1k": 0.025,
+      "cache_read_per_1k": 0.0005,
+      "cache_write_per_1k": 0.00625
+    },
+    "claude-opus-4-1": {
+      "input_per_1k": 0.015,
+      "output_per_1k": 0.075,
+      "cache_read_per_1k": 0.0015,
+      "cache_write_per_1k": 0.01875
+    },
+    "claude-opus-4": {
+      "input_per_1k": 0.015,
+      "output_per_1k": 0.075,
+      "cache_read_per_1k": 0.0015,
+      "cache_write_per_1k": 0.01875
+    },
+    "claude-sonnet-4-6": {
+      "input_per_1k": 0.003,
+      "output_per_1k": 0.015,
+      "cache_read_per_1k": 0.0003,
+      "cache_write_per_1k": 0.00375
+    },
+    "claude-sonnet-4-5": {
+      "input_per_1k": 0.003,
+      "output_per_1k": 0.015,
+      "cache_read_per_1k": 0.0003,
+      "cache_write_per_1k": 0.00375
+    },
+    "claude-sonnet-4": {
+      "input_per_1k": 0.003,
+      "output_per_1k": 0.015,
+      "cache_read_per_1k": 0.0003,
+      "cache_write_per_1k": 0.00375
+    },
+    "claude-sonnet-3-7-(deprecated)": {
+      "input_per_1k": 0.003,
+      "output_per_1k": 0.015,
+      "cache_read_per_1k": 0.0003,
+      "cache_write_per_1k": 0.00375
+    },
+    "claude-haiku-4-5": {
+      "input_per_1k": 0.001,
+      "output_per_1k": 0.005,
+      "cache_read_per_1k": 0.0001,
+      "cache_write_per_1k": 0.00125
+    },
+    "claude-haiku-3-5": {
+      "input_per_1k": 0.0008,
+      "output_per_1k": 0.004,
+      "cache_read_per_1k": 0.00008,
+      "cache_write_per_1k": 0.001
+    },
+    "claude-opus-3-(deprecated)": {
+      "input_per_1k": 0.015,
+      "output_per_1k": 0.075,
+      "cache_read_per_1k": 0.0015,
+      "cache_write_per_1k": 0.01875
+    },
+    "claude-haiku-3": {
+      "input_per_1k": 0.00025,
+      "output_per_1k": 0.00125,
+      "cache_read_per_1k": 0.000029999999999999997,
+      "cache_write_per_1k": 0.0003
+    }
   },
+  "pricing_source": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "pricing_updated": "2026-03-20",
   "retention_days": 90
 }

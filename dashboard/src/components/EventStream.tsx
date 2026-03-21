@@ -10,6 +10,7 @@ export interface StreamEvent {
   error?: string;
   subagent_id?: string;
   subagent_type?: string;
+  tool_input_summary?: Record<string, string>;
 }
 
 interface AgentStream {

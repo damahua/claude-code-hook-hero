@@ -250,10 +250,17 @@ Token costs are calculated using rates defined in [`config/defaults.json`](confi
 | Model | Input | Output | Cache Read | Cache Write |
 |-------|-------|--------|------------|-------------|
 | claude-opus-4-6 | $5.00/M | $25.00/M | $0.50/M | $6.25/M |
+| claude-opus-4-5 | $5.00/M | $25.00/M | $0.50/M | $6.25/M |
+| claude-opus-4-1 | $15.00/M | $75.00/M | $1.50/M | $18.75/M |
+| claude-opus-4-0 | $15.00/M | $75.00/M | $1.50/M | $18.75/M |
 | claude-sonnet-4-6 | $3.00/M | $15.00/M | $0.30/M | $3.75/M |
-| claude-haiku-4-5 | $0.80/M | $4.00/M | $0.08/M | $1.00/M |
+| claude-sonnet-4-5 | $3.00/M | $15.00/M | $0.30/M | $3.75/M |
+| claude-sonnet-4-0 | $3.00/M | $15.00/M | $0.30/M | $3.75/M |
+| claude-haiku-4-5 | $1.00/M | $5.00/M | $0.10/M | $1.25/M |
+| claude-haiku-3-5 | $0.80/M | $4.00/M | $0.08/M | $1.00/M |
+| claude-haiku-3-0 | $0.25/M | $1.25/M | $0.03/M | $0.30/M |
 
-Override rates by placing a custom `cost_rates` object in your config.
+Rates sourced from [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing) (last updated 2026-03-20). Override rates by placing a custom `cost_rates` object in your config.
 
 ## Querying Data
 

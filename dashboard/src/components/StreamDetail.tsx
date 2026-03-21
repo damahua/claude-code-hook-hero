@@ -174,6 +174,19 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
         {visibleItems.map((item, i) => {
           if (item.kind === 'event') {
             const ev = item.event;
+            const hasDebug = debugEntries.length > 0;
+
+            // When debug is ON, skip tool_start/tool_end — debug entries cover them
+            if (hasDebug && (ev.event === 'tool_start' || ev.event === 'tool_end')) return null;
+
+            // For non-debug tool_start, show summary inline
+            const summary = ev.event === 'tool_start' ? ev.tool_input_summary : undefined;
+            const summaryText = summary
+              ? (summary.command || summary.file_path || summary.pattern || summary.url || summary.path || '')
+              : '';
+            const maxSummary = width - 50;
+            const trimmed = summaryText.length > maxSummary ? summaryText.slice(0, maxSummary - 3) + '...' : summaryText;
+
             return (
               <Box key={scrollOffset + i} paddingLeft={2}>
                 <Text color="#484f58">{formatTime(ev.ts)} </Text>
@@ -185,6 +198,7 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
                     <Text color="#8b949e">{shortenToolName(ev.tool, 30)}</Text>
                   </>
                 )}
+                {trimmed && <Text color="#6e7681"> {trimmed}</Text>}
                 {ev.status && ev.status !== 'success' && (
                   <Text color="#f85149"> ({ev.status})</Text>
                 )}
@@ -196,49 +210,89 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
           } else {
             const d = item.entry;
             const maxLen = width - 30;
-            return (
-              <Box key={scrollOffset + i} paddingLeft={2} flexDirection="column">
-                <Box>
+
+            // Compact tool_input: show as "→ Tool  command/path"
+            if (d.type === 'tool_input') {
+              const inp = d.input || {};
+              const detail = (inp.command || inp.file_path || inp.pattern || inp.url || inp.path || '');
+              const trimDetail = detail.length > maxLen ? detail.slice(0, maxLen - 3) + '...' : detail;
+              return (
+                <Box key={scrollOffset + i} paddingLeft={2}>
                   <Text color="#484f58">{formatTime(d.ts)} </Text>
-                  <Text color="#f59e0b">{'◆'} </Text>
-                  <Text color="#f59e0b">{d.type}</Text>
-                  {d.tool && (
-                    <>
-                      <Text color="#484f58"> → </Text>
-                      <Text color="#8b949e">{shortenToolName(d.tool, 30)}</Text>
-                    </>
-                  )}
+                  <Text color="#2ea043">{'→'} </Text>
+                  <Text color="#8b949e" bold>{shortenToolName(d.tool || '', 12)}</Text>
+                  {trimDetail && <Text color="#6e7681">  {trimDetail}</Text>}
                 </Box>
-                {d.type === 'tool_input' && d.input && (
-                  <Box paddingLeft={4}>
-                    <Text color="#6e7681" wrap="truncate-end">{JSON.stringify(d.input).slice(0, maxLen)}</Text>
-                  </Box>
-                )}
-                {d.type === 'tool_result' && d.result && (
-                  <Box paddingLeft={4}>
-                    <Text color="#6e7681" wrap="truncate-end">{String(d.result).slice(0, maxLen)}</Text>
-                  </Box>
-                )}
-                {d.type === 'tool_error' && d.error && (
-                  <Box paddingLeft={4}>
-                    <Text color="#f85149" wrap="truncate-end">{String(d.error).slice(0, maxLen)}</Text>
-                  </Box>
-                )}
-                {d.type === 'thinking' && d.text && (
-                  <Box paddingLeft={4}>
-                    <Text color="#d2a8ff" wrap="truncate-end">{d.text.slice(0, maxLen)}</Text>
-                  </Box>
-                )}
-                {d.type === 'assistant_message' && d.text && (
-                  <Box paddingLeft={4}>
-                    <Text color="#c9d1d9" wrap="truncate-end">{d.text.slice(0, maxLen)}</Text>
-                  </Box>
-                )}
-                {d.type === 'user_prompt' && d.text && (
-                  <Box paddingLeft={4}>
-                    <Text color="#79c0ff" wrap="truncate-end">{d.text.slice(0, maxLen)}</Text>
-                  </Box>
-                )}
+              );
+            }
+
+            // Compact tool_result: show as "← Tool  (ok)" or short preview
+            if (d.type === 'tool_result') {
+              return (
+                <Box key={scrollOffset + i} paddingLeft={2}>
+                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                  <Text color="#3fb950">{'←'} </Text>
+                  <Text color="#8b949e">{shortenToolName(d.tool || '', 12)}</Text>
+                  <Text color="#3fb950">  ok</Text>
+                </Box>
+              );
+            }
+
+            // Tool error
+            if (d.type === 'tool_error') {
+              return (
+                <Box key={scrollOffset + i} paddingLeft={2}>
+                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                  <Text color="#f85149">{'✗'} </Text>
+                  <Text color="#8b949e">{shortenToolName(d.tool || '', 12)}</Text>
+                  <Text color="#f85149">  {String(d.error).slice(0, maxLen)}</Text>
+                </Box>
+              );
+            }
+
+            // User prompt
+            if (d.type === 'user_prompt') {
+              return (
+                <Box key={scrollOffset + i} paddingLeft={2}>
+                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                  <Text color="#79c0ff">{'▸'} </Text>
+                  <Text color="#79c0ff">prompt</Text>
+                  {d.text && <Text color="#6e7681">  {d.text.slice(0, maxLen)}</Text>}
+                </Box>
+              );
+            }
+
+            // Thinking
+            if (d.type === 'thinking') {
+              return (
+                <Box key={scrollOffset + i} paddingLeft={2}>
+                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                  <Text color="#d2a8ff">{'◇'} </Text>
+                  <Text color="#d2a8ff">thinking</Text>
+                  {d.text && <Text color="#6e7681">  {d.text.slice(0, maxLen)}</Text>}
+                </Box>
+              );
+            }
+
+            // Assistant message
+            if (d.type === 'assistant_message') {
+              return (
+                <Box key={scrollOffset + i} paddingLeft={2}>
+                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                  <Text color="#c9d1d9">{'◈'} </Text>
+                  <Text color="#c9d1d9">response</Text>
+                  {d.text && <Text color="#6e7681">  {d.text.slice(0, maxLen)}</Text>}
+                </Box>
+              );
+            }
+
+            // Fallback for unknown debug types
+            return (
+              <Box key={scrollOffset + i} paddingLeft={2}>
+                <Text color="#484f58">{formatTime(d.ts)} </Text>
+                <Text color="#f59e0b">{'◆'} </Text>
+                <Text color="#f59e0b">{d.type}</Text>
+                {d.tool && <Text color="#8b949e"> → {shortenToolName(d.tool, 30)}</Text>}
               </Box>
             );
           }
