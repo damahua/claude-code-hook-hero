@@ -326,7 +326,8 @@ function computeAllTimeStats(baseDir: string): { tokens: number; cost: number } 
   return { tokens, cost };
 }
 
-export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState {
+export function useLiveTelemetry(baseDir?: string): TelemetryState {
+  baseDir = baseDir || DEFAULT_BASE;
   const [state, setState] = useState<TelemetryState>(EMPTY_STATE);
 
   const refresh = useCallback(() => {
@@ -569,7 +570,8 @@ export function useLiveTelemetry(baseDir: string = DEFAULT_BASE): TelemetryState
   return state;
 }
 
-export function useHistoryTelemetry(baseDir: string = DEFAULT_BASE, date?: string): TelemetryState {
+export function useHistoryTelemetry(baseDir?: string, date?: string): TelemetryState {
+  baseDir = baseDir || DEFAULT_BASE;
   const [state, setState] = useState<TelemetryState>(EMPTY_STATE);
 
   useEffect(() => {
