@@ -2,12 +2,6 @@
 
 Structured telemetry for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Captures every hook event across your sessions — tools, tokens, costs, git activity, subagents, and more — with msgpack compression, optional encryption, and a real-time terminal dashboard.
 
-```
- ╦ ╦╔═╗╔═╗╦╔═  ╦ ╦╔═╗╦═╗╔═╗
- ╠═╣║ ║║ ║╠╩╗  ╠═╣║╣ ╠╦╝║ ║
- ╩ ╩╚═╝╚═╝╩ ╩  ╩ ╩╚═╝╩╚═╚═╝
-```
-
 ![Hook Hero Dashboard](docs/dashboard.png)
 
 ## Install
