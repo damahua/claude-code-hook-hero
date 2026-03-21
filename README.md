@@ -8,6 +8,8 @@ Structured telemetry for [Claude Code](https://docs.anthropic.com/en/docs/claude
  ╩ ╩╚═╝╚═╝╩ ╩  ╩ ╩╚═╝╩╚═╚═╝
 ```
 
+![Hook Hero Dashboard](docs/dashboard.png)
+
 ## Install
 
 ```sh
