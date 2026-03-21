@@ -6,11 +6,19 @@ Structured telemetry for [Claude Code](https://docs.anthropic.com/en/docs/claude
 
 ## Install
 
+**Prerequisites:** [Node.js](https://nodejs.org/) (v18+) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
+
 ```sh
+# Clone and install dependencies
+git clone https://github.com/damahua/claude-code-hook-hero.git
+cd claude-code-hook-hero
+npm install
+
+# Install as a Claude Code plugin
 /plugin install hook-hero
 ```
 
-That's it. Telemetry starts flowing on your next Claude Code session. No configuration files, no environment variables, no setup scripts.
+Telemetry starts flowing on your next Claude Code session.
 
 ## Uninstall
 
@@ -413,8 +421,8 @@ Hook Hero captures telemetry that may include file paths, bash commands, and pro
 
 ## Requirements
 
-- **Node.js** (for running `.mjs` hook handlers)
-- **Claude Code** with plugin support
+- **[Node.js](https://nodejs.org/)** v18+ (for running `.mjs` hook handlers and msgpack)
+- **[Claude Code](https://docs.anthropic.com/en/docs/claude-code)** with plugin support
 
 ## License
 
