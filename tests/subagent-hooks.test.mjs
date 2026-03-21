@@ -6,12 +6,15 @@ import os from 'node:os';
 import { handleSubagentStart } from '../lib/subagent-start.mjs';
 import { handleSubagentStop } from '../lib/subagent-stop.mjs';
 import { SessionStore } from '../lib/session-store.mjs';
+import { StorageCodec } from '../lib/storage-codec.mjs';
+
+const JSON_CONFIG = { storage: { format: 'json', encryption: { enabled: false } } };
 
 describe('subagent hooks', () => {
   let tmpDir, store;
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-hero-test-'));
-    store = new SessionStore(tmpDir);
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
     store.ensureDirs('2026-03-15');
     store.createBuffer('sess1', {
       session_id: 'sess1', date: '2026-03-15',
@@ -22,8 +25,8 @@ describe('subagent hooks', () => {
 
   it('subagent_start appends event with v, subagent_id, and type', () => {
     handleSubagentStart({ session_id: 'sess1', subagent_id: 'sub-1', subagent_type: 'Explore' }, store);
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[0];
     assert.equal(event.event, 'subagent_start');
     assert.equal(event.v, 1);
     assert.equal(event.subagent_id, 'sub-1');
@@ -42,8 +45,8 @@ describe('subagent hooks', () => {
 
   it('subagent_stop appends event with v and subagent_id', () => {
     handleSubagentStop({ session_id: 'sess1', subagent_id: 'sub-1', subagent_type: 'Explore' }, store);
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[0];
     assert.equal(event.event, 'subagent_stop');
     assert.equal(event.v, 1);
     assert.equal(event.subagent_id, 'sub-1');

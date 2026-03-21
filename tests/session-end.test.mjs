@@ -5,6 +5,9 @@ import path from 'node:path';
 import os from 'node:os';
 import { handleSessionEnd } from '../lib/session-end.mjs';
 import { SessionStore } from '../lib/session-store.mjs';
+import { StorageCodec } from '../lib/storage-codec.mjs';
+
+const JSON_CONFIG = { storage: { format: 'json', encryption: { enabled: false } } };
 
 describe('handleSessionEnd', () => {
   let tmpDir, store;
@@ -12,7 +15,7 @@ describe('handleSessionEnd', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-hero-test-'));
-    store = new SessionStore(tmpDir);
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
     store.ensureDirs('2026-03-15');
     store.createBuffer('sess1', {
       session_id: 'sess1', channel: 'claude-code', date: '2026-03-15',
@@ -49,9 +52,8 @@ describe('handleSessionEnd', () => {
 
   it('appends session_end event to JSONL', () => {
     handleSessionEnd({ session_id: 'sess1', cwd: '/tmp' }, store, mockRates);
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const lines = fs.readFileSync(eventFile, 'utf-8').trim().split('\n');
-    const event = JSON.parse(lines[lines.length - 1]);
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[events.length - 1];
     assert.equal(event.event, 'session_end');
     assert.equal(event.v, 1);
   });

@@ -4,13 +4,16 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { SessionStore } from '../lib/session-store.mjs';
+import { StorageCodec } from '../lib/storage-codec.mjs';
+
+const JSON_CONFIG = { storage: { format: 'json', encryption: { enabled: false } } };
 
 describe('SessionStore', () => {
   let tmpDir, store;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-hero-test-'));
-    store = new SessionStore(tmpDir);
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
   });
 
   afterEach(() => {

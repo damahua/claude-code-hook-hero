@@ -1,0 +1,9 @@
+{
+  "name": "hook-hero",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@msgpack/msgpack": "^3.0.0"
+  }
+}

@@ -5,12 +5,15 @@ import path from 'node:path';
 import os from 'node:os';
 import { handleUserPromptSubmit } from '../lib/user-prompt-submit.mjs';
 import { SessionStore } from '../lib/session-store.mjs';
+import { StorageCodec } from '../lib/storage-codec.mjs';
+
+const JSON_CONFIG = { storage: { format: 'json', encryption: { enabled: false } } };
 
 describe('handleUserPromptSubmit', () => {
   let tmpDir, store;
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-hero-test-'));
-    store = new SessionStore(tmpDir);
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
     store.ensureDirs('2026-03-15');
     store.createBuffer('sess1', { session_id: 'sess1', date: '2026-03-15', prompts_count: 0 });
   });
@@ -20,8 +23,8 @@ describe('handleUserPromptSubmit', () => {
 
   it('appends user_prompt event with prompt_length but not content', () => {
     handleUserPromptSubmit({ session_id: 'sess1', prompt: 'hello world' }, store);
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[0];
     assert.equal(event.event, 'user_prompt');
     assert.equal(event.v, 1);
     assert.equal(event.prompt_length, 11);

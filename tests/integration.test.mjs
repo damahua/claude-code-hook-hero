@@ -5,6 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 
 import { SessionStore } from '../lib/session-store.mjs';
+import { StorageCodec } from '../lib/storage-codec.mjs';
 import { handleSessionStart } from '../lib/session-start.mjs';
 import { handleUserPromptSubmit } from '../lib/user-prompt-submit.mjs';
 import { handlePreToolUse } from '../lib/pre-tool-use.mjs';
@@ -22,6 +23,7 @@ import { handleSessionEnd } from '../lib/session-end.mjs';
 
 const SESSION_ID = 'integ-test-session-001';
 const CHANNEL = 'claude-code';
+const JSON_CONFIG = { storage: { format: 'json', encryption: { enabled: false } } };
 const MOCK_COST_RATES = {
   'claude-sonnet-4-6': {
     input_per_1k: 0.003,
@@ -39,7 +41,7 @@ describe('Full lifecycle integration — all 14 hooks end-to-end', () => {
 
   before(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-hero-integ-'));
-    store = new SessionStore(tmpDir);
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
 
     // ── Step 1: session_start ──────────────────────────────────────────────
     handleSessionStart(
@@ -182,9 +184,7 @@ describe('Full lifecycle integration — all 14 hooks end-to-end', () => {
     const summaryPath = path.join(tmpDir, 'sessions', date, `${SESSION_ID}.json`);
     summary = JSON.parse(fs.readFileSync(summaryPath, 'utf-8'));
 
-    const eventsPath = path.join(tmpDir, 'events', date, `${SESSION_ID}.jsonl`);
-    const raw = fs.readFileSync(eventsPath, 'utf-8').trim();
-    eventsLines = raw.split('\n').map((line) => JSON.parse(line));
+    eventsLines = store.readEvents(date, SESSION_ID);
   });
 
   after(() => {

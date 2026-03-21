@@ -5,13 +5,16 @@ import path from 'node:path';
 import os from 'node:os';
 import { handlePreToolUse } from '../lib/pre-tool-use.mjs';
 import { SessionStore } from '../lib/session-store.mjs';
+import { StorageCodec } from '../lib/storage-codec.mjs';
+
+const JSON_CONFIG = { storage: { format: 'json', encryption: { enabled: false } } };
 
 describe('handlePreToolUse', () => {
   let tmpDir, store;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-hero-test-'));
-    store = new SessionStore(tmpDir);
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
     store.ensureDirs('2026-03-15');
     store.createBuffer('sess1', { session_id: 'sess1', date: '2026-03-15' });
   });
@@ -28,8 +31,8 @@ describe('handlePreToolUse', () => {
       tool_input: { file_path: '/src/Main.java', content: 'secret stuff' },
     }, store);
 
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[events.length - 1];
 
     assert.equal(event.event, 'tool_start');
     assert.equal(event.v, 1);
@@ -56,8 +59,8 @@ describe('handlePreToolUse', () => {
       },
     }, store);
 
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[events.length - 1];
     const summary = event.tool_input_summary;
 
     assert.equal(summary.pattern, 'test.*');
@@ -79,8 +82,8 @@ describe('handlePreToolUse', () => {
       tool_input: { command: longCommand },
     }, store);
 
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[events.length - 1];
 
     assert.equal(event.tool_input_summary.command.length, 100);
     assert.equal(event.tool_input_summary.command, 'a'.repeat(100));
@@ -94,8 +97,8 @@ describe('handlePreToolUse', () => {
       tool_input: { file_path: '/test.txt' },
     }, store);
 
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[events.length - 1];
 
     assert.equal(event.session_id, 'sess1');
     assert.ok(event.ts, 'ts field should exist');
@@ -109,8 +112,8 @@ describe('handlePreToolUse', () => {
       tool_use_id: 'toolu_123',
     }, store);
 
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[events.length - 1];
 
     assert.equal(event.event, 'tool_start');
     assert.deepEqual(event.tool_input_summary, {});

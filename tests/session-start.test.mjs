@@ -5,13 +5,16 @@ import path from 'node:path';
 import os from 'node:os';
 import { handleSessionStart } from '../lib/session-start.mjs';
 import { SessionStore } from '../lib/session-store.mjs';
+import { StorageCodec } from '../lib/storage-codec.mjs';
+
+const JSON_CONFIG = { storage: { format: 'json', encryption: { enabled: false } } };
 
 describe('handleSessionStart', () => {
   let tmpDir, store;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-hero-test-'));
-    store = new SessionStore(tmpDir);
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
   });
 
   afterEach(() => {
@@ -31,12 +34,11 @@ describe('handleSessionStart', () => {
     assert.equal(buffer.subagents_total, 0);
 
     const date = buffer.date;
-    const eventFile = path.join(tmpDir, 'events', date, 'sess1.jsonl');
-    assert.ok(fs.existsSync(eventFile));
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
-    assert.equal(event.event, 'session_start');
-    assert.equal(event.v, 1);
-    assert.equal(event.channel, 'claude-code');
+    const events = store.readEvents(date, 'sess1');
+    assert.ok(events.length >= 1);
+    assert.equal(events[0].event, 'session_start');
+    assert.equal(events[0].v, 1);
+    assert.equal(events[0].channel, 'claude-code');
   });
 
   it('cleans orphaned buffers on start', () => {

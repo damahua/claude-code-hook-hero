@@ -2,20 +2,22 @@ import { useState, useEffect, useCallback } from 'react';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import { StorageCodec } from '../../../lib/storage-codec.mjs';
 import type { AgentStream, StreamEvent } from '../components/EventStream.js';
 
 const DEFAULT_BASE = path.join(os.homedir(), '.claude', 'hook-hero');
+const codec = new StorageCodec();
 
 function today(): string {
   const d = new Date();
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
 }
 
-function parseJsonlFile(filePath: string): StreamEvent[] {
+/** Read events from a file — auto-detects JSONL or binary msgpack format */
+function parseEventsFile(filePath: string): StreamEvent[] {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8').trim();
-    if (!content) return [];
-    return content.split('\n').map(line => JSON.parse(line));
+    const buf = fs.readFileSync(filePath);
+    return codec.decodeAllFrames(buf) as StreamEvent[];
   } catch {
     return [];
   }
@@ -167,7 +169,8 @@ function buildStreamsFromEvents(events: StreamEvent[], todayStartMs?: number): M
 
   for (const [id, stream] of streams) {
     const hasActivity = stream.events.some(ev => !LIFECYCLE_EVENTS.has(ev.event));
-    const hasBuffer = fs.existsSync(path.join(DEFAULT_BASE, 'buffer', `${id}.json`));
+    const hasBuffer = fs.existsSync(path.join(DEFAULT_BASE, 'buffer', `${id}.buf`))
+      || fs.existsSync(path.join(DEFAULT_BASE, 'buffer', `${id}.json`));
 
     // Remove ghost streams (no activity + no buffer)
     if (!hasActivity && !hasBuffer) {
@@ -186,8 +189,10 @@ function buildStreamsFromEvents(events: StreamEvent[], todayStartMs?: number): M
     // Read buffer for active sessions — tokens + fill missing project name
     if (hasBuffer) {
       try {
-        const bufferPath = path.join(DEFAULT_BASE, 'buffer', `${id}.json`);
-        const buf = JSON.parse(fs.readFileSync(bufferPath, 'utf-8'));
+        const bufPath = fs.existsSync(path.join(DEFAULT_BASE, 'buffer', `${id}.buf`))
+          ? path.join(DEFAULT_BASE, 'buffer', `${id}.buf`)
+          : path.join(DEFAULT_BASE, 'buffer', `${id}.json`);
+        const buf = codec.decode(fs.readFileSync(bufPath));
 
         // Tokens
         const ti = buf.tokens_input ?? 0;
@@ -311,7 +316,7 @@ function computeAllTimeStats(baseDir: string): { tokens: number; cost: number } 
     const dates = fs.readdirSync(sessionsBase).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d));
     for (const date of dates) {
       const dir = path.join(sessionsBase, date);
-      const files = fs.readdirSync(dir).filter(f => f.endsWith('.json'));
+      const files = fs.readdirSync(dir).filter(f => f.endsWith('.json') || f.endsWith('.buf'));
       for (const file of files) {
         try {
           const summary = JSON.parse(fs.readFileSync(path.join(dir, file), 'utf-8'));
@@ -337,10 +342,10 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
     // Collect dates to read: today + any dates from active buffers
     const datesToRead = new Set<string>([date]);
     try {
-      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json'))) {
+      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json') || f.endsWith('.buf'))) {
         try {
-          const buf = JSON.parse(fs.readFileSync(path.join(bufferDir, f), 'utf-8'));
-          if (buf.date) datesToRead.add(buf.date);
+          const buf = codec.decode(fs.readFileSync(path.join(bufferDir, f))) as any;
+          if (buf?.date) datesToRead.add(buf.date);
         } catch {}
       }
     } catch {}
@@ -350,9 +355,9 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
     for (const d of datesToRead) {
       const eventsDir = path.join(baseDir, 'events', d);
       if (fs.existsSync(eventsDir)) {
-        const files = fs.readdirSync(eventsDir).filter(f => f.endsWith('.jsonl'));
+        const files = fs.readdirSync(eventsDir).filter(f => f.endsWith('.jsonl') || f.endsWith('.events'));
         for (const file of files) {
-          allEvents.push(...parseJsonlFile(path.join(eventsDir, file)));
+          allEvents.push(...parseEventsFile(path.join(eventsDir, file)));
         }
       }
     }
@@ -377,7 +382,7 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
     // Collect active buffer session IDs to avoid double-counting
     const activeBufferIds = new Set<string>();
     try {
-      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json'))) {
+      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json') || f.endsWith('.buf'))) {
         activeBufferIds.add(f.replace('.json', ''));
       }
     } catch {}
@@ -387,7 +392,7 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
     for (const d of datesToRead) {
     const sessionsDir = path.join(baseDir, 'sessions', d);
     if (fs.existsSync(sessionsDir)) {
-      const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+      const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json') || f.endsWith('.buf'));
       for (const file of files) {
         const sessionId = file.replace('.json', '');
         if (activeBufferIds.has(sessionId)) continue;
@@ -439,7 +444,7 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
     // Count active buffer files as active sessions
     let activeSessions = 0;
     if (fs.existsSync(bufferDir)) {
-      activeSessions = fs.readdirSync(bufferDir).filter(f => f.endsWith('.json')).length;
+      activeSessions = fs.readdirSync(bufferDir).filter(f => f.endsWith('.json') || f.endsWith('.buf')).length;
     }
 
     // Count finalized sessions — only today
@@ -447,7 +452,7 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
     {
       const sd = path.join(baseDir, 'sessions', date);
       if (fs.existsSync(sd)) {
-        finalizedSessions = fs.readdirSync(sd).filter(f => f.endsWith('.json')).length;
+        finalizedSessions = fs.readdirSync(sd).filter(f => f.endsWith('.json') || f.endsWith('.buf')).length;
       }
     }
     const totalSessions = finalizedSessions + activeSessions;
@@ -532,10 +537,10 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
     const watchDirs: string[] = [bufferDir];
     const watchDates = new Set<string>([today()]);
     try {
-      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json'))) {
+      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json') || f.endsWith('.buf'))) {
         try {
-          const buf = JSON.parse(fs.readFileSync(path.join(bufferDir, f), 'utf-8'));
-          if (buf.date) watchDates.add(buf.date);
+          const buf = codec.decode(fs.readFileSync(path.join(bufferDir, f))) as any;
+          if (buf?.date) watchDates.add(buf.date);
         } catch {}
       }
     } catch {}
@@ -589,7 +594,7 @@ export function useHistoryTelemetry(baseDir?: string, date?: string): TelemetryS
     // Read all session summaries
     const summaries: any[] = [];
     if (fs.existsSync(sessionsDir)) {
-      const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json'));
+      const files = fs.readdirSync(sessionsDir).filter(f => f.endsWith('.json') || f.endsWith('.buf'));
       for (const file of files) {
         const summary = readSessionSummary(path.join(sessionsDir, file));
         if (!summary) continue;
@@ -613,9 +618,9 @@ export function useHistoryTelemetry(baseDir?: string, date?: string): TelemetryS
     // Build streams from events
     const allEvents: StreamEvent[] = [];
     if (fs.existsSync(eventsDir)) {
-      const files = fs.readdirSync(eventsDir).filter(f => f.endsWith('.jsonl'));
+      const files = fs.readdirSync(eventsDir).filter(f => f.endsWith('.jsonl') || f.endsWith('.events'));
       for (const file of files) {
-        allEvents.push(...parseJsonlFile(path.join(eventsDir, file)));
+        allEvents.push(...parseEventsFile(path.join(eventsDir, file)));
       }
     }
     allEvents.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());

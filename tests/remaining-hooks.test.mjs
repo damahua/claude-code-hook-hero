@@ -9,12 +9,15 @@ import { handleWorktreeCreate } from '../lib/worktree-create.mjs';
 import { handleWorktreeRemove } from '../lib/worktree-remove.mjs';
 import { handleTaskCompleted } from '../lib/task-completed.mjs';
 import { SessionStore } from '../lib/session-store.mjs';
+import { StorageCodec } from '../lib/storage-codec.mjs';
+
+const JSON_CONFIG = { storage: { format: 'json', encryption: { enabled: false } } };
 
 describe('remaining hooks', () => {
   let tmpDir, store;
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hook-hero-test-'));
-    store = new SessionStore(tmpDir);
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
     store.ensureDirs('2026-03-15');
     store.createBuffer('sess1', {
       session_id: 'sess1',
@@ -31,8 +34,8 @@ describe('remaining hooks', () => {
 
   it('pre-compact appends compact_start and increments buffer', () => {
     handlePreCompact({ session_id: 'sess1' }, store);
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[0];
     assert.equal(event.event, 'compact_start');
     assert.equal(event.v, 1);
     assert.equal(store.readBuffer('sess1').compactions_count, 1);
@@ -40,8 +43,8 @@ describe('remaining hooks', () => {
 
   it('post-compact appends compact_end (no buffer update)', () => {
     handlePostCompact({ session_id: 'sess1' }, store);
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[0];
     assert.equal(event.event, 'compact_end');
     assert.equal(event.v, 1);
   });
@@ -51,8 +54,8 @@ describe('remaining hooks', () => {
       { session_id: 'sess1', worktree_path: '/tmp/wt', branch: 'feat-x' },
       store,
     );
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[0];
     assert.equal(event.event, 'worktree_create');
     assert.equal(event.v, 1);
     assert.equal(event.worktree_path, '/tmp/wt');
@@ -62,8 +65,8 @@ describe('remaining hooks', () => {
 
   it('worktree-remove appends event and increments buffer', () => {
     handleWorktreeRemove({ session_id: 'sess1', worktree_path: '/tmp/wt' }, store);
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[0];
     assert.equal(event.event, 'worktree_remove');
     assert.equal(event.v, 1);
     assert.equal(store.readBuffer('sess1').worktrees_removed, 1);
@@ -74,8 +77,8 @@ describe('remaining hooks', () => {
       { session_id: 'sess1', task_id: '5', task_subject: 'Fix bug' },
       store,
     );
-    const eventFile = path.join(tmpDir, 'events', '2026-03-15', 'sess1.jsonl');
-    const event = JSON.parse(fs.readFileSync(eventFile, 'utf-8').trim());
+    const events = store.readEvents('2026-03-15', 'sess1');
+    const event = events[0];
     assert.equal(event.event, 'task_completed');
     assert.equal(event.v, 1);
     assert.equal(event.task_id, '5');
