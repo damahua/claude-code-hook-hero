@@ -1,6 +1,6 @@
 # Hook Hero
 
-Structured telemetry for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Captures every hook event across your sessions — tools, tokens, costs, git activity, subagents, and more — and stores it locally as queryable JSON.
+Structured telemetry for [Claude Code](https://docs.anthropic.com/en/docs/claude-code). Captures every hook event across your sessions — tools, tokens, costs, git activity, subagents, and more — with msgpack compression, optional encryption, and a real-time terminal dashboard.
 
 ```
  ╦ ╦╔═╗╔═╗╦╔═  ╦ ╦╔═╗╦═╗╔═╗
@@ -53,11 +53,15 @@ All telemetry is stored locally under `~/.claude/hook-hero/`:
 
 ```
 ~/.claude/hook-hero/
-├── sessions/{date}/{session_id}.json   # Session summaries (one per session)
-├── events/{date}/{session_id}.jsonl    # Raw hook events (append-only log)
-├── buffer/{session_id}.json            # Live session state (active sessions)
-└── debug/{date}/{session_id}.jsonl     # Debug entries (opt-in)
+├── sessions/{date}/{session_id}.json     # Session summaries (JSON, human-readable)
+├── events/{date}/{session_id}.events     # Raw hook events (msgpack, compressed)
+├── buffer/{session_id}.buf               # Live session state (msgpack)
+├── debug/{date}/{session_id}.jsonl       # Debug entries (JSONL, human-readable)
+├── config.json                           # User config overrides (optional)
+└── .key                                  # Encryption key (auto-generated, chmod 600)
 ```
+
+Events and buffers use [MessagePack](https://msgpack.org/) with dictionary compression by default (~47% smaller than JSON). Session summaries and debug logs stay as human-readable JSON/JSONL. Old JSON/JSONL files are auto-detected and readable regardless of current format setting.
 
 **Nothing leaves your machine.** All data stays on local disk.
 
@@ -209,12 +213,18 @@ Press `d` on any active session to toggle debug capture. When enabled, Hook Hero
 | `↑` `↓` / `j` `k` | Navigate sessions and groups |
 | `Enter` | Expand group / open session detail |
 | `Esc` | Collapse group / exit detail view |
+| `a` | Open AI analysis chat for selected session |
+| `Tab` | Toggle focus between main view and chat panel |
 | `d` | Toggle debug capture for a session |
 | `c` | Collapse all groups |
 | `e` | Expand all groups |
 | `f` | Cycle project filter |
 | `g` / `G` | Jump to top / bottom (in detail view) |
 | `q` | Quit (or exit detail view) |
+
+### AI Analysis
+
+Press `a` on any session to open a chat panel at the bottom of the screen. Type a question and press Enter — Hook Hero spawns `claude -p` with the session's telemetry context (tools, tokens, cost, events timeline, git stats) and streams the response. Follow-up questions are supported. Press `Tab` to toggle focus between the dashboard and the chat panel.
 
 ## Commands
 
@@ -260,7 +270,46 @@ Token costs are calculated using rates defined in [`config/defaults.json`](confi
 | claude-haiku-3-5 | $0.80/M | $4.00/M | $0.08/M | $1.00/M |
 | claude-haiku-3-0 | $0.25/M | $1.25/M | $0.03/M | $0.30/M |
 
-Rates sourced from [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing) (last updated 2026-03-20). Override rates by placing a custom `cost_rates` object in your config.
+Rates sourced from [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing) and auto-updated daily on session start. Override rates by placing a custom `cost_rates` object in your config.
+
+## Storage Configuration
+
+Hook Hero uses msgpack with dictionary compression by default. Configure format and encryption in `~/.claude/hook-hero/config.json`:
+
+```json
+{
+  "storage": {
+    "format": "msgpack",
+    "encryption": {
+      "enabled": true,
+      "key_source": "keyfile"
+    }
+  }
+}
+```
+
+### Format
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `"msgpack"` | Yes | Binary format with dictionary compression (~47% smaller than JSON) |
+| `"json"` | No | Human-readable JSON/JSONL (for debugging or external tooling) |
+
+### Encryption
+
+Optional AES-256-GCM encryption for events and buffer files. Each event frame is encrypted independently (supports append without re-encrypting the whole file). Overhead: 29 bytes per frame.
+
+| Key source | How it works |
+|-----------|--------------|
+| `"keyfile"` (default) | Auto-generates a 256-bit key at `~/.claude/hook-hero/.key` (chmod 600) |
+| `"env"` | Reads from `HOOK_HERO_KEY` environment variable (hex-encoded, 64 chars) |
+
+### Dictionary Compression
+
+Events contain highly repetitive strings (field names, event types, tool names, session IDs). The codec replaces these with compact integer codes:
+
+- **Static dictionary**: 56 codes for common keys (`session_id`, `tool_use_id`, ...) and values (`tool_start`, `Read`, `success`, ...)
+- **Per-file dynamic dictionary**: stored as the first frame in each event file, maps session-specific strings (UUID, project path) to codes
 
 ## Querying Data
 
@@ -291,18 +340,20 @@ hook-hero/
 │   ├── hooks.json          # Hook registration (14 hooks)
 │   └── run-hook.cmd        # Cross-platform dispatcher (Unix + Windows)
 ├── lib/
-│   ├── session-start.mjs   # Session initialization
-│   ├── session-end.mjs     # Summary finalization
+│   ├── storage-codec.mjs   # StorageCodec — msgpack, dictionary, encryption
 │   ├── session-store.mjs   # File-based storage with locking
+│   ├── session-start.mjs   # Session initialization + pricing auto-update
+│   ├── session-end.mjs     # Summary finalization
 │   ├── cost-calculator.mjs # Token cost calculation
+│   ├── update-pricing.mjs  # Daily pricing fetch from Anthropic
 │   ├── git-utils.mjs       # Git context extraction
 │   ├── stdin-reader.mjs    # Hook stdin parsing
 │   ├── stop.mjs            # Transcript parsing + token aggregation
 │   └── ...                 # One handler per hook event
 ├── config/
-│   ├── defaults.json       # Cost rates + retention settings
+│   ├── defaults.json       # Storage, cost rates, retention settings
 │   └── schema.json         # JSON Schema for session summaries
-├── dashboard/              # Ink-based terminal dashboard
+├── dashboard/              # Ink-based terminal dashboard + AI chat
 ├── commands/               # Slash commands
 ├── skills/                 # AI-queryable skills
 └── tests/                  # Test suite (14 test files)
@@ -313,11 +364,29 @@ hook-hero/
 1. **Claude Code fires a hook** — one of 14 registered events
 2. **`run-hook.cmd` dispatches** to the matching `.mjs` handler in `lib/`
 3. **The handler reads stdin** (hook payload with session ID, tool info, etc.)
-4. **`SessionStore` persists the data** — buffer files for active sessions, JSONL event logs, and final JSON summaries
-5. **On `Stop`**, the transcript is parsed for token usage and costs are calculated
-6. **On `SessionEnd`**, the buffer is finalized into a session summary
+4. **`StorageCodec` encodes the data** — dictionary compression, msgpack serialization, optional encryption
+5. **`SessionStore` persists to disk** — buffer files for active sessions, compressed event logs, and JSON session summaries
+6. **On `Stop`**, the transcript is parsed for token usage and costs are calculated
+7. **On `SessionEnd`**, the buffer is finalized into a session summary
 
 Concurrency is handled via file-based locking with stale lock detection.
+
+## Security
+
+Hook Hero captures telemetry that may include file paths, bash commands, and project structure from your sessions. Keep these points in mind:
+
+**Data stays local.** All telemetry is written to `~/.claude/hook-hero/` on your machine. Nothing is sent to any external server.
+
+**Encryption key management.** If you enable encryption, the key is stored at `~/.claude/hook-hero/.key` (256-bit, chmod 600). This file is your only way to decrypt your telemetry data.
+
+- **Never commit the `.key` file** to version control. The `.gitignore` excludes it, but verify if you copy the data directory.
+- **Back up the key** if you need to preserve access to encrypted data across machines.
+- **If you lose the key**, encrypted event and buffer files become unreadable. Session summaries (JSON) are never encrypted and remain accessible.
+- **For teams**, use the `HOOK_HERO_KEY` environment variable (`"key_source": "env"`) instead of a keyfile so each member manages their own key.
+
+**What is captured.** Session summaries include: project paths, git remote URLs, branch names, model names, tool invocations (including bash commands up to 100 chars), token counts, and cost estimates. Review the [session schema](#session-summary-schema) for the full list. Debug mode (when enabled) captures full tool inputs and outputs.
+
+**What is NOT captured.** File contents, prompt text, assistant responses, and API keys are never stored in session summaries or event logs. Debug mode captures tool inputs/outputs but is opt-in per session.
 
 ## Requirements
 
