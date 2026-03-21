@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/amplitude/hook-hero/config/schema.json",
+  "$id": "https://github.com/damahua/claude-code-hook-hero/config/schema.json",
   "title": "Hook Hero Session Summary",
   "description": "Schema for session summary files written to ~/.claude/hook-hero/sessions/{date}/{id}.json",
   "type": "object",

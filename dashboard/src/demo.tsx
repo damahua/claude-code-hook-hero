@@ -40,7 +40,7 @@ fs.writeFileSync(path.join(SESSIONS_DIR, 'completed-001.json'), JSON.stringify({
   session_id: 'completed-001',
   channel: 'claude-code',
   timing: { start_time: ts(-3600000), end_time: ts(-1800000), duration_seconds: 1800 },
-  context: { project_path: '/Users/leo/Work/nova', project_name: 'nova', repo: 'amplitude/nova', git_branch: 'main', model: 'claude-opus-4-6' },
+  context: { project_path: '/Users/you/Work/my-app', project_name: 'nova', repo: 'acme/my-app', git_branch: 'main', model: 'claude-opus-4-6' },
   tools: { total_calls: 42, by_type: { Read: 15, Edit: 10, Bash: 8, Grep: 5, Agent: 4 }, failures: 2 },
   tokens: { input: 180000, output: 25000, total: 205000, cache_read: 120000, cache_write: 60000, estimated_cost_usd: 4.12 },
   git: { commits_made: 3, branches_touched: ['main'], files_changed: 12, insertions: 245, deletions: 89, prs_created: 1 },
@@ -53,7 +53,7 @@ fs.writeFileSync(path.join(SESSIONS_DIR, 'completed-001.json'), JSON.stringify({
 
 // Create a completed session's events
 const completedEvents = [
-  { v: 1, ts: ts(-3600000), event: 'session_start', session_id: 'completed-001', channel: 'claude-code', context: { repo: 'amplitude/nova' } },
+  { v: 1, ts: ts(-3600000), event: 'session_start', session_id: 'completed-001', channel: 'claude-code', context: { repo: 'acme/my-app' } },
   ...Array.from({ length: 42 }, (_, i) => [
     { v: 1, ts: ts(-3600000 + i * 40000), event: 'tool_start', session_id: 'completed-001', tool: ['Read', 'Edit', 'Bash', 'Grep', 'Agent'][i % 5], tool_use_id: `t-${i}` },
     { v: 1, ts: ts(-3600000 + i * 40000 + 500), event: i === 15 || i === 30 ? 'tool_failure' : 'tool_end', session_id: 'completed-001', tool: ['Read', 'Edit', 'Bash', 'Grep', 'Agent'][i % 5], tool_use_id: `t-${i}`, status: 'success' },
@@ -68,7 +68,7 @@ const activeBuffer = {
   channel: 'claude-code',
   date: DATE,
   start_time: ts(-300000),
-  context: { project_path: '/Users/leo/Work/ampclaw', project_name: 'ampclaw', repo: 'damahua/ampclaw', git_branch: 'feat-dashboard', model: 'claude-sonnet-4-6' },
+  context: { project_path: '/Users/you/Work/another-project', project_name: 'ampclaw', repo: 'damahua/ampclaw', git_branch: 'feat-dashboard', model: 'claude-sonnet-4-6' },
   prompts_count: 3,
   tools_total: 8,
   tools_by_type: { Read: 4, Edit: 2, Grep: 1, Bash: 1 },

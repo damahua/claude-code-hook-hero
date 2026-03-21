@@ -29,7 +29,7 @@ ls ~/.claude/hook-hero/sessions/$(date +%Y-%m-%d)/*.json 2>/dev/null | wc -l
 
 ### Filter by repo or channel
 ```bash
-grep -rl '"repo": "amplitude/nova"' ~/.claude/hook-hero/sessions/
+grep -rl '"repo": "acme/my-app"' ~/.claude/hook-hero/sessions/
 grep -rl '"channel": "claude-cli"' ~/.claude/hook-hero/sessions/
 ```
 
