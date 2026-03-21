@@ -144,6 +144,20 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     if (chatFocused) return;
 
     if (detailStream) {
+      // Compute actual timeline length (events + debug entries)
+      let timelineLen = detailStream.events.length;
+      const debugBase = path.join(HOOK_HERO_BASE, 'debug');
+      try {
+        for (const dateDir of fs.readdirSync(debugBase)) {
+          const debugFile = path.join(debugBase, dateDir, `${detailStream.id}.jsonl`);
+          if (fs.existsSync(debugFile)) {
+            const content = fs.readFileSync(debugFile, 'utf-8').trim();
+            if (content) timelineLen += content.split('\n').length;
+          }
+        }
+      } catch {}
+      const maxCursor = Math.max(0, timelineLen - 1);
+
       // Detail view
       if (key.escape || input === 'q') {
         setDetailStreamId(null);
@@ -151,11 +165,11 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
       } else if (key.upArrow) {
         setDetailScroll(s => Math.max(0, s - 1));
       } else if (key.downArrow) {
-        setDetailScroll(s => Math.min(detailStream.events.length - 1, s + 1));
+        setDetailScroll(s => Math.min(maxCursor, s + 1));
       } else if (input === 'g') {
         setDetailScroll(0);
       } else if (input === 'G') {
-        setDetailScroll(Math.max(0, detailStream.events.length - 10));
+        setDetailScroll(maxCursor);
       } else if (input === 'a') {
         setChatStreamId(detailStream.id);
         setChatFocused(true);
@@ -273,6 +287,13 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
       }
     } catch {}
 
+    // Derive scroll offset so cursor stays visible
+    const detailVisibleLines = Math.max(5, mainHeight - 8);
+    const totalTimelineItems = detailStream.events.length + debugEntries.length;
+    // Center cursor in visible window, clamped to bounds
+    let detailScrollOffset = Math.max(0, detailScroll - Math.floor(detailVisibleLines / 2));
+    detailScrollOffset = Math.min(detailScrollOffset, Math.max(0, totalTimelineItems - detailVisibleLines));
+
     return (
       <Box flexDirection="column" height={termHeight}>
         <Box flexDirection="column" height={mainHeight}>
@@ -280,7 +301,8 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
             stream={detailStream}
             width={termWidth - 2}
             height={mainHeight}
-            scrollOffset={detailScroll}
+            scrollOffset={detailScrollOffset}
+            cursorIndex={detailScroll}
             debugEntries={debugEntries}
           />
         </Box>
@@ -367,7 +389,6 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
           expandedIds={expandedIds}
           collapsedGroups={effectiveCollapsed}
           selectedGroup={selectedGroup}
-          maxStreamsPerGroup={Math.max(3, Math.floor((termHeight - 12) / 3))}
         />
       </Box>
 

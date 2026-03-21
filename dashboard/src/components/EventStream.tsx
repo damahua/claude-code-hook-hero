@@ -361,7 +361,7 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
                   )}
                   <Text color="#30363d"> {'─'.repeat(Math.max(1, width - project.length - 25))}</Text>
                 </Box>
-                {group.streams.slice(0, maxStreamsPerGroup).map((stream, j) => (
+                {group.streams.map((stream, j) => (
                   <StreamRow
                     key={stream.id}
                     stream={stream}
@@ -370,11 +370,6 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
                     collapsed={stream.done && !(expandedIds?.has(stream.id))}
                   />
                 ))}
-                {group.streams.length > maxStreamsPerGroup && (
-                  <Box paddingLeft={2}>
-                    <Text color="#484f58">... {group.streams.length - maxStreamsPerGroup} more (use f to filter)</Text>
-                  </Box>
-                )}
               </Box>
             );
           })}

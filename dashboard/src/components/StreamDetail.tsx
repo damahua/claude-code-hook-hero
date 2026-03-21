@@ -62,10 +62,11 @@ interface StreamDetailProps {
   width: number;
   height: number;
   scrollOffset: number;
+  cursorIndex?: number;
   debugEntries?: DebugEntry[];
 }
 
-export function StreamDetail({ stream, width, height, scrollOffset, debugEntries = [] }: StreamDetailProps) {
+export function StreamDetail({ stream, width, height, scrollOffset, cursorIndex, debugEntries = [] }: StreamDetailProps) {
   const elapsed = (stream.endTime || Date.now()) - stream.startTime;
   const totalTools = Object.values(stream.toolCounts).reduce((s, c) => s + c, 0);
   const toolEntries = Object.entries(stream.toolCounts)
@@ -90,7 +91,19 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
       <Box>
         <Text color="#484f58">esc </Text>
         <Text color="#30363d">│ </Text>
-        <Text color="#d2a8ff" bold>{stream.label}</Text>
+        {(() => {
+          const isCli = stream.done && stream.promptCount <= 1;
+          // Fix label if channel doesn't match prompt-based detection
+          const correctedLabel = isCli
+            ? stream.label.replace(/^claude-code/, 'claude-cli')
+            : stream.label.replace(/^claude-cli/, 'claude-code');
+          return (
+            <>
+              <Text color={isCli ? '#6e7681' : '#06b6d4'}>{isCli ? '$ ' : '# '}</Text>
+              <Text color="#d2a8ff" bold>{correctedLabel}</Text>
+            </>
+          );
+        })()}
       </Box>
 
       {/* Stats */}
@@ -172,6 +185,11 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
           </Box>
         )}
         {visibleItems.map((item, i) => {
+          const absoluteIdx = scrollOffset + i;
+          const isHighlighted = cursorIndex !== undefined && absoluteIdx === cursorIndex;
+          const hlBg = isHighlighted ? '#1c2128' : undefined;
+          const hlPrefix = isHighlighted ? '▸' : ' ';
+
           if (item.kind === 'event') {
             const ev = item.event;
             const hasDebug = debugEntries.length > 0;
@@ -188,10 +206,11 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
             const trimmed = summaryText.length > maxSummary ? summaryText.slice(0, maxSummary - 3) + '...' : summaryText;
 
             return (
-              <Box key={scrollOffset + i} paddingLeft={2}>
+              <Box key={scrollOffset + i} paddingLeft={1}>
+                <Text color={isHighlighted ? '#d2a8ff' : '#30363d'}>{hlPrefix}</Text>
                 <Text color="#484f58">{formatTime(ev.ts)} </Text>
                 <Text color={eventColor(ev)}>{eventIcon(ev)} </Text>
-                <Text color={eventColor(ev)}>{ev.event}</Text>
+                <Text color={eventColor(ev)} bold={isHighlighted}>{ev.event}</Text>
                 {ev.tool && (
                   <>
                     <Text color="#484f58"> → </Text>
@@ -212,86 +231,83 @@ export function StreamDetail({ stream, width, height, scrollOffset, debugEntries
             const maxLen = width - 30;
 
             // Compact tool_input: show as "→ Tool  command/path"
+            const hl = <Text color={isHighlighted ? '#d2a8ff' : '#30363d'}>{hlPrefix}</Text>;
+
             if (d.type === 'tool_input') {
               const inp = d.input || {};
               const detail = (inp.command || inp.file_path || inp.pattern || inp.url || inp.path || '');
               const trimDetail = detail.length > maxLen ? detail.slice(0, maxLen - 3) + '...' : detail;
               return (
-                <Box key={scrollOffset + i} paddingLeft={2}>
-                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                <Box key={scrollOffset + i} paddingLeft={1}>
+                  {hl}<Text color="#484f58">{formatTime(d.ts)} </Text>
                   <Text color="#2ea043">{'→'} </Text>
-                  <Text color="#8b949e" bold>{shortenToolName(d.tool || '', 12)}</Text>
+                  <Text color="#8b949e" bold={isHighlighted}>{shortenToolName(d.tool || '', 12)}</Text>
                   {trimDetail && <Text color="#6e7681">  {trimDetail}</Text>}
                 </Box>
               );
             }
 
-            // Compact tool_result: show as "← Tool  (ok)" or short preview
             if (d.type === 'tool_result') {
               return (
-                <Box key={scrollOffset + i} paddingLeft={2}>
-                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                <Box key={scrollOffset + i} paddingLeft={1}>
+                  {hl}<Text color="#484f58">{formatTime(d.ts)} </Text>
                   <Text color="#3fb950">{'←'} </Text>
-                  <Text color="#8b949e">{shortenToolName(d.tool || '', 12)}</Text>
+                  <Text color="#8b949e" bold={isHighlighted}>{shortenToolName(d.tool || '', 12)}</Text>
                   <Text color="#3fb950">  ok</Text>
                 </Box>
               );
             }
 
-            // Tool error
             if (d.type === 'tool_error') {
               return (
-                <Box key={scrollOffset + i} paddingLeft={2}>
-                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                <Box key={scrollOffset + i} paddingLeft={1}>
+                  {hl}<Text color="#484f58">{formatTime(d.ts)} </Text>
                   <Text color="#f85149">{'✗'} </Text>
-                  <Text color="#8b949e">{shortenToolName(d.tool || '', 12)}</Text>
+                  <Text color="#8b949e" bold={isHighlighted}>{shortenToolName(d.tool || '', 12)}</Text>
                   <Text color="#f85149">  {String(d.error).slice(0, maxLen)}</Text>
                 </Box>
               );
             }
 
-            // User prompt
             if (d.type === 'user_prompt') {
               return (
-                <Box key={scrollOffset + i} paddingLeft={2}>
-                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                <Box key={scrollOffset + i} paddingLeft={1}>
+                  {hl}<Text color="#484f58">{formatTime(d.ts)} </Text>
                   <Text color="#79c0ff">{'▸'} </Text>
-                  <Text color="#79c0ff">prompt</Text>
+                  <Text color="#79c0ff" bold={isHighlighted}>prompt</Text>
                   {d.text && <Text color="#6e7681">  {d.text.slice(0, maxLen)}</Text>}
                 </Box>
               );
             }
 
-            // Thinking
             if (d.type === 'thinking') {
               return (
-                <Box key={scrollOffset + i} paddingLeft={2}>
-                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                <Box key={scrollOffset + i} paddingLeft={1}>
+                  {hl}<Text color="#484f58">{formatTime(d.ts)} </Text>
                   <Text color="#d2a8ff">{'◇'} </Text>
-                  <Text color="#d2a8ff">thinking</Text>
+                  <Text color="#d2a8ff" bold={isHighlighted}>thinking</Text>
                   {d.text && <Text color="#6e7681">  {d.text.slice(0, maxLen)}</Text>}
                 </Box>
               );
             }
 
-            // Assistant message
             if (d.type === 'assistant_message') {
               return (
-                <Box key={scrollOffset + i} paddingLeft={2}>
-                  <Text color="#484f58">{formatTime(d.ts)} </Text>
+                <Box key={scrollOffset + i} paddingLeft={1}>
+                  {hl}<Text color="#484f58">{formatTime(d.ts)} </Text>
                   <Text color="#c9d1d9">{'◈'} </Text>
-                  <Text color="#c9d1d9">response</Text>
+                  <Text color="#c9d1d9" bold={isHighlighted}>response</Text>
                   {d.text && <Text color="#6e7681">  {d.text.slice(0, maxLen)}</Text>}
                 </Box>
               );
             }
 
-            // Fallback for unknown debug types
+            // Fallback
             return (
-              <Box key={scrollOffset + i} paddingLeft={2}>
-                <Text color="#484f58">{formatTime(d.ts)} </Text>
+              <Box key={scrollOffset + i} paddingLeft={1}>
+                {hl}<Text color="#484f58">{formatTime(d.ts)} </Text>
                 <Text color="#f59e0b">{'◆'} </Text>
-                <Text color="#f59e0b">{d.type}</Text>
+                <Text color="#f59e0b" bold={isHighlighted}>{d.type}</Text>
                 {d.tool && <Text color="#8b949e"> → {shortenToolName(d.tool, 30)}</Text>}
               </Box>
             );
