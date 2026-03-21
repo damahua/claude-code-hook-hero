@@ -135,7 +135,34 @@ This makes the `hook-hero` command available globally:
 hook-hero live                        # Real-time monitoring
 hook-hero history                     # Review today's sessions
 hook-hero history --date 2026-03-19   # Review a specific date
+hook-hero export --session <id>       # Export session as JSON
 ```
+
+### Export Command
+
+Decrypt and export session data as readable JSON — useful for external analysis, piping to `jq`, or sharing session reports.
+
+```sh
+# List available sessions
+hook-hero export --date 2026-03-20
+
+# Export a specific session summary
+hook-hero export --session 24768f42
+
+# Include the full decrypted event timeline
+hook-hero export --session 24768f42 --events
+
+# Export all sessions for a date
+hook-hero export --all --date 2026-03-20
+
+# Write to file instead of stdout
+hook-hero export --session 24768f42 --events -o session.json
+
+# Pipe to jq for analysis
+hook-hero export --session 24768f42 --events | jq '.events[] | select(.event == "tool_end") | .tool'
+```
+
+The export command decrypts encrypted `.events` and `.buf` files automatically using your local key. Session summaries (`.json`) are always readable without decryption.
 
 ### Development mode
 
