@@ -5,3 +5,4 @@ package-lock.json
 .key
 .vercel/
 .DS_Store
+.superpowers/

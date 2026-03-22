@@ -22,12 +22,38 @@ program
   .description('⚔️  Hook Hero — Agent telemetry dashboard')
   .version('1.0.0');
 
+function enterFullScreen() {
+  // Patch stdout to strip \x1b[3J (erase scrollback) — Ink's renderer
+  // emits this on full-screen redraws, triggering iTerm's
+  // "A control sequence attempted to clear scrollback history" warning.
+  const origWrite = process.stdout.write;
+  process.stdout.write = function (chunk: any, enc?: any, cb?: any) {
+    if (typeof chunk === 'string') {
+      chunk = chunk.replaceAll('\x1b[3J', '');
+    } else if (Buffer.isBuffer(chunk)) {
+      const str = chunk.toString();
+      if (str.includes('\x1b[3J')) {
+        chunk = Buffer.from(str.replaceAll('\x1b[3J', ''));
+      }
+    }
+    return origWrite.call(process.stdout, chunk, enc, cb);
+  } as any;
+
+  process.stdout.write('\x1b[?1049h'); // alternate screen buffer
+  process.stdout.write('\x1b[H');      // cursor home
+  process.on('exit', () => {
+    process.stdout.write = origWrite;  // restore original write
+    process.stdout.write('\x1b[?1049l'); // restore main screen
+  });
+}
+
 program
   .command('live')
   .alias('l')
   .description('Watch telemetry in real-time')
   .option('--dir <path>', 'Hook-hero data directory', undefined)
   .action((opts) => {
+    enterFullScreen();
     render(<App mode="live" baseDir={opts.dir} />);
   });
 
@@ -38,6 +64,7 @@ program
   .option('--date <YYYY-MM-DD>', 'Date to view (default: today)', undefined)
   .option('--dir <path>', 'Hook-hero data directory', undefined)
   .action((opts) => {
+    enterFullScreen();
     render(<App mode="history" date={opts.date} baseDir={opts.dir} />);
   });
 
@@ -185,6 +212,7 @@ program
 // Default to live mode
 program
   .action(() => {
+    enterFullScreen();
     render(<App mode="live" />);
   });
 
