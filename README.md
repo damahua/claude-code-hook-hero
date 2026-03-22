@@ -14,16 +14,19 @@ git clone https://github.com/damahua/claude-code-hook-hero.git
 cd claude-code-hook-hero
 npm install
 
-# Install as a Claude Code plugin
-/plugin install hook-hero
+# Register the local directory as a marketplace, then install
+claude plugin marketplace add /path/to/claude-code-hook-hero
+claude plugin install hook-hero
 ```
 
-Telemetry starts flowing on your next Claude Code session.
+Replace `/path/to/claude-code-hook-hero` with the actual path where you cloned the repo.
+
+Telemetry starts flowing on your next Claude Code session and persists across all future sessions.
 
 ## Uninstall
 
 ```sh
-/plugin uninstall hook-hero
+claude plugin uninstall hook-hero
 ```
 
 This removes the plugin and stops all hook registration. Your existing telemetry data in `~/.claude/hook-hero/` is **not** deleted — remove it manually if you no longer need it:
