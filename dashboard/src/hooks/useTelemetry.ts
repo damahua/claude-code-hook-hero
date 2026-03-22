@@ -164,7 +164,7 @@ function buildStreamsFromEvents(events: StreamEvent[], todayStartMs?: number): M
 
   // Filter ghosts and mark idle streams
   const LIFECYCLE_EVENTS = new Set(['session_start', 'session_end']);
-  const IDLE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
+  const IDLE_THRESHOLD_MS = 1 * 60 * 1000; // 1 minute
   const now = Date.now();
 
   for (const [id, stream] of streams) {

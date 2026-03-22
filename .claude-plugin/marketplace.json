@@ -1,0 +1,14 @@
+{
+  "name": "hook-hero",
+  "owner": {
+    "name": "Le Zhang"
+  },
+  "plugins": [
+    {
+      "name": "hook-hero",
+      "description": "Agent session telemetry for Claude Code — captures structured events from 14 hook lifecycle events with msgpack compression, optional encryption, and a real-time terminal dashboard.",
+      "category": "observability",
+      "source": "./."
+    }
+  ]
+}

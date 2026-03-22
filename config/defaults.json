@@ -1,6 +1,7 @@
 {
   "storage": {
     "format": "msgpack",
+    "detail_level": "full",
     "encryption": {
       "enabled": false,
       "algorithm": "aes-256-gcm",
