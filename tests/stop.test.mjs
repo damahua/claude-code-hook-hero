@@ -51,4 +51,27 @@ describe('handleStop', () => {
     const buffer = store.readBuffer('sess1');
     assert.equal(buffer.tokens_input, 0);
   });
+
+  it('accumulates interaction_time_sec from last_prompt_ts', () => {
+    const baseTs = '2026-03-15T10:00:00.000Z';
+    const baseMs = new Date(baseTs).getTime();
+    store.updateBuffer('sess1', (buf) => ({
+      ...buf,
+      interaction_time_sec: 60,
+      last_prompt_ts: baseTs,
+    }));
+    handleStop({ session_id: 'sess1', cwd: '/tmp' }, store, baseMs + 30_000);
+    const buffer = store.readBuffer('sess1');
+    assert.equal(buffer.interaction_time_sec, 90);
+  });
+
+  it('does not crash when last_prompt_ts is missing', () => {
+    store.updateBuffer('sess1', (buf) => ({
+      ...buf,
+      interaction_time_sec: 45,
+    }));
+    handleStop({ session_id: 'sess1', cwd: '/tmp' }, store, Date.now());
+    const buffer = store.readBuffer('sess1');
+    assert.equal(buffer.interaction_time_sec, 45);
+  });
 });
