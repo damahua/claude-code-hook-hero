@@ -3,6 +3,10 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "setup": "claude plugin marketplace add \"$(pwd)\" && claude plugin install hook-hero",
+    "unsetup": "claude plugin uninstall hook-hero && claude plugin marketplace remove hook-hero"
+  },
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0"
   }
