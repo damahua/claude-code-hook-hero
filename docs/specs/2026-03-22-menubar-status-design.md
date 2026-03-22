@@ -3,6 +3,7 @@
 **Date:** 2026-03-22
 **Status:** Draft
 **Branch:** feature/menubar-status
+**Schema Version:** 1.0
 
 ## Overview
 
@@ -34,9 +35,9 @@ Format: `● 2 | 1h23m | $4.57`
 
 A dropdown/popover showing detailed metrics for today:
 
-- **Today's Summary:** sessions total, interaction time, cost, tokens (input/output/cache), tool calls, prompts
-- **Active Sessions:** per-session breakdown (project, duration, cost, prompts)
-- **Git Activity:** commits, files changed
+- **Today's Summary:** sessions total, interaction time, cost, tokens (input/output/cache_read/cache_write), tool calls, prompts
+- **Active Sessions:** per-session breakdown (project, wall-clock duration, cost, prompts)
+- **Git Activity:** commits made, files changed
 - **Optional:** "Launch at Login" toggle
 
 ## Status File Contract
@@ -47,6 +48,7 @@ Hook Hero writes `~/.claude/hook-hero/status.json`. This is the sole interface b
 
 ```json
 {
+  "schema_version": "1.0",
   "active_sessions": 2,
   "today": {
     "sessions_total": 5,
@@ -55,7 +57,8 @@ Hook Hero writes `~/.claude/hook-hero/status.json`. This is the sole interface b
     "tokens": {
       "input": 125000,
       "output": 43000,
-      "cache_read": 89000
+      "cache_read": 89000,
+      "cache_write": 15000
     },
     "tool_calls": 312,
     "prompts": 47,
@@ -77,11 +80,24 @@ Hook Hero writes `~/.claude/hook-hero/status.json`. This is the sole interface b
 }
 ```
 
+**Field notes:**
+- `schema_version` — enables the menu bar app to detect incompatible schema changes.
+- `today.git.commits` maps to session summary field `git.commits_made`.
+- `today.tokens.cache_write` included for completeness — used in cost calculations.
+- `active[].duration_sec` is wall-clock time since session start (`Date.now() - start_time`), not interaction time.
+
 ### File Location
 
 `~/.claude/hook-hero/status.json`
 
 ## Hook Hero Changes (This Repo)
+
+### Interaction Time Tracking
+
+`interaction_time_sec` is not currently stored in buffers or session summaries — it is computed on the fly by walking event files (see `computeTimeDurations` in the dashboard). To avoid expensive event-file scans on every status write:
+
+- Add a running `interaction_time_sec` accumulator to the session buffer, updated on each `Stop` hook (which already has timing data from the transcript).
+- `write-status.mjs` reads this field from buffers and completed session summaries — no event file scanning needed.
 
 ### New File: `lib/write-status.mjs`
 
@@ -90,7 +106,11 @@ Reads today's sessions + active buffers, computes aggregated metrics, writes `st
 - Reads completed sessions from `sessions/YYYY-MM-DD/*.json`
 - Reads active session buffers from `buffer/*.buf`
 - Computes: active count, today's totals (cost, time, tokens, tools, prompts, git)
-- Writes atomic JSON to `~/.claude/hook-hero/status.json`
+- Writes atomically: write to `status.json.tmp`, then `rename()` to `status.json`
+
+### Concurrency: Atomic Writes
+
+Multiple Claude Code sessions may fire hooks concurrently. Since each hook invocation reads the same source files (sessions + buffers) and computes a full aggregate, the write is idempotent. The atomic write strategy (write to temp file, then `fs.rename`) ensures the menu bar app never reads a partial file. In the worst case, two concurrent writes produce slightly different aggregates (one may not see the other's just-written buffer), but the next hook event corrects this within seconds.
 
 ### Hooks That Trigger Status Write
 
@@ -108,6 +128,8 @@ Only high-value events (not every tool call):
 ### Update Strategy
 
 On-change only. Status file is written as a side effect of the hooks listed above. No polling, no cron, no background process.
+
+**Staleness trade-off:** During long AI turns (e.g., multi-minute code generation), the status file will not update since no hooks fire mid-turn. This is an acceptable trade-off to avoid per-tool-call writes. The `Stop` hook fires at the end of each turn, refreshing the data.
 
 ### What Doesn't Change
 
@@ -140,7 +162,7 @@ StatusFileWatcher (FSEvents on ~/.claude/hook-hero/status.json)
 | Component | Responsibility |
 |-----------|---------------|
 | `StatusFileWatcher` | Watches `status.json` for changes via FSEvents |
-| `StatusModel` | Codable struct matching the JSON schema |
+| `StatusModel` | Codable struct matching the JSON schema, with `schema_version` check |
 | `MenuBarItem` | `NSStatusItem` rendering the compact bar display |
 | `DropdownView` | SwiftUI popover with today's summary, active sessions, git stats |
 | `AppDelegate` | App lifecycle, launch-at-login, midnight reset |
@@ -151,7 +173,7 @@ StatusFileWatcher (FSEvents on ~/.claude/hook-hero/status.json)
 2. Reads `status.json` on startup
 3. Watches for file changes — updates display on each change
 4. If file doesn't exist: shows `● 0 | 0m | $0.00`
-5. Resets display at midnight (new day)
+5. **Midnight reset:** The app compares the date portion of `updated_at` against the current date. If they differ (new day, no sessions yet), it resets to the fresh-day state independently — it does not wait for a hook to fire.
 
 ### Distribution
 
@@ -169,7 +191,7 @@ StatusFileWatcher (FSEvents on ~/.claude/hook-hero/status.json)
 
 - No web UI or browser-based approach
 - No inter-process communication (sockets, XPC, etc.)
-- No changes to Hook Hero's existing data formats
+- No changes to Hook Hero's existing data formats (except the new `interaction_time_sec` accumulator in buffers)
 - No real-time streaming — file-based updates are sufficient
 - Menu bar app does not write back to Hook Hero
 
@@ -177,8 +199,12 @@ StatusFileWatcher (FSEvents on ~/.claude/hook-hero/status.json)
 
 ### Hook Hero (status writer)
 - Unit test: `write-status.mjs` produces correct JSON from mock session data
+- Unit test: `interaction_time_sec` accumulator updates correctly on `Stop` hook
 - Integration test: trigger hooks and verify `status.json` is written with correct values
+- Integration test: concurrent hook invocations produce valid (non-corrupt) `status.json`
 
 ### Menu Bar App
 - Unit test: `StatusModel` decodes all valid JSON variants (active, inactive, fresh day, missing fields)
+- Unit test: `StatusModel` handles `schema_version` mismatch gracefully
+- Unit test: midnight reset triggers when `updated_at` date differs from current date
 - UI test: `MenuBarItem` renders correct format strings for each state
