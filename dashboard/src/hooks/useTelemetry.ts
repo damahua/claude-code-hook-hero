@@ -331,11 +331,12 @@ function computeAllTimeStats(baseDir: string): { tokens: number; cost: number } 
   return { tokens, cost };
 }
 
-export function useLiveTelemetry(baseDir?: string): TelemetryState {
-  baseDir = baseDir || DEFAULT_BASE;
+export function useLiveTelemetry(rawBaseDir?: string): TelemetryState {
+  const baseDir = rawBaseDir || DEFAULT_BASE;
   const [state, setState] = useState<TelemetryState>(EMPTY_STATE);
 
   const refresh = useCallback(() => {
+    try {
     const date = today();
     const bufferDir = path.join(baseDir, 'buffer');
 
@@ -383,7 +384,7 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
     const activeBufferIds = new Set<string>();
     try {
       for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json') || f.endsWith('.buf'))) {
-        activeBufferIds.add(f.replace('.json', ''));
+        activeBufferIds.add(f.replace(/\.(json|buf)$/, ''));
       }
     } catch {}
 
@@ -441,10 +442,14 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
       }
     }
 
-    // Count active buffer files as active sessions
+    // Count active buffer files as active sessions (deduplicate by session ID)
     let activeSessions = 0;
     if (fs.existsSync(bufferDir)) {
-      activeSessions = fs.readdirSync(bufferDir).filter(f => f.endsWith('.json') || f.endsWith('.buf')).length;
+      const bufferSessionIds = new Set<string>();
+      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.json') || f.endsWith('.buf'))) {
+        bufferSessionIds.add(f.replace(/\.(json|buf)$/, ''));
+      }
+      activeSessions = bufferSessionIds.size;
     }
 
     // Count finalized sessions — only today
@@ -527,6 +532,10 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
       aiTimeMs,
       humanTimeMs,
     });
+    } catch (err) {
+      // Log refresh errors to stderr for debugging
+      process.stderr.write(`[hook-hero] refresh error: ${err}\n`);
+    }
   }, [baseDir]);
 
   useEffect(() => {
@@ -575,8 +584,8 @@ export function useLiveTelemetry(baseDir?: string): TelemetryState {
   return state;
 }
 
-export function useHistoryTelemetry(baseDir?: string, date?: string): TelemetryState {
-  baseDir = baseDir || DEFAULT_BASE;
+export function useHistoryTelemetry(rawBaseDir?: string, date?: string): TelemetryState {
+  const baseDir = rawBaseDir || DEFAULT_BASE;
   const [state, setState] = useState<TelemetryState>(EMPTY_STATE);
 
   useEffect(() => {
