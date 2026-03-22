@@ -331,6 +331,55 @@ describe('writeStatus – Task 3: active buffer aggregation', () => {
   });
 });
 
+describe('writeStatus – Task 7: interaction_time_sec aggregation', () => {
+  let tmpDir, store;
+  const today = todayDate();
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'write-status-test-'));
+    store = new SessionStore(tmpDir, new StorageCodec(JSON_CONFIG));
+    store.ensureDirs(today);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('sums interaction_time_sec from completed sessions and active buffers', () => {
+    // Completed session with 300s
+    store.writeSession(today, 'completed-time', {
+      schema_version: '1.0',
+      session_id: 'completed-time',
+      interaction_time_sec: 300,
+      tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0, estimated_cost_usd: 0 },
+      tools: { total_calls: 0 },
+      prompts: { count: 0 },
+      git: { commits_made: 0, files_changed: 0 },
+    });
+
+    // Active buffer with 120s
+    store.createBuffer('active-time', {
+      session_id: 'active-time',
+      channel: 'claude-code',
+      date: today,
+      start_time: new Date().toISOString(),
+      context: { project_name: 'TimeProj', model: 'claude-sonnet-4-6' },
+      tokens_input: 0,
+      tokens_output: 0,
+      tokens_cache_read: 0,
+      tokens_cache_write: 0,
+      tools_total: 0,
+      prompts_count: 0,
+      interaction_time_sec: 120,
+    });
+
+    writeStatus(store, MOCK_RATES);
+    const status = readStatus(tmpDir);
+
+    assert.equal(status.today.interaction_time_sec, 420);
+  });
+});
+
 describe('writeStatus – Task 4: active session cost from cost rates', () => {
   let tmpDir, store;
   const today = todayDate();

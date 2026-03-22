@@ -68,6 +68,26 @@ describe('handleSessionEnd', () => {
     // Should not throw
   });
 
+  it('persists interaction_time_sec from buffer into session summary', () => {
+    store.createBuffer('sess-time', {
+      session_id: 'sess-time', channel: 'claude-code', date: '2026-03-15',
+      start_time: '2026-03-15T10:30:00Z',
+      context: { project_path: '/tmp', project_name: 'test', directory: '', cwd: '/tmp', repo: null, git_remote_url: null, git_branch: null, model: 'claude-opus-4-6' },
+      prompts_count: 0, tools_total: 0, tools_by_type: {}, tools_failures: 0,
+      tokens_input: 0, tokens_output: 0, tokens_cache_read: 0, tokens_cache_write: 0,
+      subagents_total: 0, subagents_by_type: {},
+      compactions_count: 0, worktrees_created: 0, worktrees_removed: 0, tasks_completed: 0,
+      interaction_time_sec: 245.5,
+    });
+
+    handleSessionEnd({ session_id: 'sess-time', cwd: '/tmp' }, store, mockRates);
+
+    const summaryPath = path.join(tmpDir, 'sessions', '2026-03-15', 'sess-time.json');
+    assert.ok(fs.existsSync(summaryPath));
+    const summary = JSON.parse(fs.readFileSync(summaryPath, 'utf-8'));
+    assert.equal(summary.interaction_time_sec, 245.5);
+  });
+
   it('sets estimated_cost_usd to null for unknown model', () => {
     store.createBuffer('sess2', {
       session_id: 'sess2', channel: 'claude-code', date: '2026-03-15',
