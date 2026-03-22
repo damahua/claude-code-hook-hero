@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "setup": "npm install && cd dashboard && npm install && npm link && cd .. && claude plugin marketplace add \"$(pwd)\" && claude plugin install hook-hero",
-    "unsetup": "claude plugin uninstall hook-hero && claude plugin marketplace remove hook-hero && cd dashboard && npm unlink -g"
+    "unsetup": "claude plugin uninstall hook-hero; claude plugin marketplace remove hook-hero; npm unlink -g hook-hero-dash"
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0"
