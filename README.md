@@ -11,7 +11,6 @@ Structured telemetry for [Claude Code](https://docs.anthropic.com/en/docs/claude
 ```sh
 git clone https://github.com/damahua/claude-code-hook-hero.git
 cd claude-code-hook-hero
-npm install
 npm run setup
 ```
 

@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "setup": "claude plugin marketplace add \"$(pwd)\" && claude plugin install hook-hero",
-    "unsetup": "claude plugin uninstall hook-hero && claude plugin marketplace remove hook-hero"
+    "setup": "npm install && cd dashboard && npm install && npm link && cd .. && claude plugin marketplace add \"$(pwd)\" && claude plugin install hook-hero",
+    "unsetup": "claude plugin uninstall hook-hero && claude plugin marketplace remove hook-hero && cd dashboard && npm unlink -g"
   },
   "dependencies": {
     "@msgpack/msgpack": "^3.0.0"
