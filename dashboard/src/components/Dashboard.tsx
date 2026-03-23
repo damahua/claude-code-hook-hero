@@ -5,7 +5,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { Header } from './Header.js';
 import { ToolBar } from './Panel.js';
-import { EventStream, sortStreams } from './EventStream.js';
+import { EventStream, sortStreams, computeScrollLine } from './EventStream.js';
 import { StreamDetail } from './StreamDetail.js';
 import { ChatPanel } from './ChatView.js';
 import type { DebugEntry } from './StreamDetail.js';
@@ -65,6 +65,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
 
   const [elapsed, setElapsed] = useState(0);
   const [cursorIdx, setCursorIdx] = useState(0);
+  const [streamScrollLine, setStreamScrollLine] = useState(0);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string> | null>(null);
   const [detailStreamId, setDetailStreamId] = useState<string | null>(null);
@@ -125,6 +126,14 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     }
   }, [navItems.length, cursorIdx]);
 
+  // Helper: move cursor and update scroll in one shot
+  const moveCursor = (newIdx: number) => {
+    const clamped = Math.max(0, Math.min(newIdx, navItems.length - 1));
+    setCursorIdx(clamped);
+    const areaHeight = Math.max(5, (termHeight - 7) - 2);
+    setStreamScrollLine(prev => computeScrollLine(prev, clamped, navItems, effectiveCollapsed, expandedIds, areaHeight, getProject));
+  };
+
   const currentItem = navItems[cursorIdx];
   const detailStream = detailStreamId ? sorted.find(s => s.id === detailStreamId) : null;
 
@@ -135,6 +144,10 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
   const selectedGroup = currentItem?.kind === 'group' ? currentItem.project : null;
 
   useInput((input, key) => {
+    // Ignore mouse event escape sequences — terminal clicks send SGR mouse
+    // sequences (\x1b[<...M/m) that Ink partially parses as input characters.
+    if (input === '[' || input.startsWith('<') || input === 'M' || input === 'm') return;
+
     // Tab toggles focus between main view and chat panel
     if (key.tab && chatStreamId) {
       setChatFocused(f => !f);
@@ -179,9 +192,9 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
 
     // Main navigation — single flat list
     if (key.upArrow || input === 'k') {
-      setCursorIdx(i => Math.max(0, i - 1));
+      moveCursor(cursorIdx - 1);
     } else if (key.downArrow || input === 'j') {
-      setCursorIdx(i => Math.min(navItems.length - 1, i + 1));
+      moveCursor(cursorIdx + 1);
     } else if (key.return) {
       const item = navItems[cursorIdx];
       if (!item) return;
@@ -200,7 +213,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         });
         // When expanding, move cursor to first stream in the group
         if (wasCollapsed) {
-          setCursorIdx(cursorIdx + 1);
+          moveCursor(cursorIdx + 1);
         }
       } else {
         // Stream: expand done streams first, then detail view
@@ -223,7 +236,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         });
         // Move cursor to the group header
         const groupIdx = navItems.findIndex(n => n.kind === 'group' && n.project === item.project);
-        if (groupIdx >= 0) setCursorIdx(groupIdx);
+        if (groupIdx >= 0) moveCursor(groupIdx);
       }
     } else if (input === 'd') {
       const item = navItems[cursorIdx];
@@ -243,7 +256,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
     } else if (input === 'c') {
       const allGroupNames = navItems.filter(n => n.kind === 'group').map(n => (n as any).project);
       setCollapsedGroups(new Set(allGroupNames));
-      setCursorIdx(0);
+      moveCursor(0);
     } else if (input === 'e') {
       setCollapsedGroups(new Set());
     } else if (input === 'f') {
@@ -253,7 +266,7 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         if (idx === -1 || idx === allProjects.length - 1) return null;
         return allProjects[idx + 1]!;
       });
-      setCursorIdx(0);
+      moveCursor(0);
     } else if (input === 'a') {
       const item = navItems[cursorIdx];
       if (item?.kind === 'stream') {
@@ -381,15 +394,19 @@ export function Dashboard({ data, mode, date }: DashboardProps) {
         </Box>
       )}
 
-      {/* Streams — flexGrow fills remaining terminal height, overflow clipped */}
+      {/* Streams — viewport-limited rendering to prevent Ink overflow issues */}
       <Box flexGrow={1} flexDirection="column" overflow="hidden">
         <EventStream
           streams={filteredStreams}
           width={termWidth - 4}
+          height={mainHeight - 7}
           selectedIndex={selectedIndex}
           expandedIds={expandedIds}
           collapsedGroups={effectiveCollapsed}
           selectedGroup={selectedGroup}
+          cursorIdx={cursorIdx}
+          navItemCount={navItems.length}
+          scrollLine={streamScrollLine}
         />
       </Box>
 

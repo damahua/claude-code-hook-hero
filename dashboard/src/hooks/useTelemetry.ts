@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { StorageCodec } from '../../../lib/storage-codec.mjs';
+import { SessionStore } from '../../../lib/session-store.mjs';
 import type { AgentStream, StreamEvent } from '../components/EventStream.js';
 
 const DEFAULT_BASE = path.join(os.homedir(), '.claude', 'hook-hero');
@@ -35,7 +36,18 @@ function buildStreamsFromEvents(events: StreamEvent[], todayStartMs?: number): M
   const todayStart = todayStartMs ?? new Date(today() + 'T00:00:00').getTime();
   const streams = new Map<string, AgentStream>();
 
+  // Deduplicate events — hooks can fire multiple times for the same event,
+  // and batch flush + initEventFile can produce duplicates.
+  const seen = new Set<string>();
+  const dedupedEvents: StreamEvent[] = [];
   for (const ev of events) {
+    const key = `${(ev as any).session_id}|${ev.ts}|${ev.event}|${ev.tool || ''}|${(ev as any).tool_use_id || ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    dedupedEvents.push(ev);
+  }
+
+  for (const ev of dedupedEvents) {
     const sessionId = (ev as any).session_id;
     if (!sessionId) continue;
 
@@ -186,6 +198,9 @@ function buildStreamsFromEvents(events: StreamEvent[], todayStartMs?: number): M
       stream.idle = now - lastEventTime > IDLE_THRESHOLD_MS;
     }
 
+    // Check debug mode — always, regardless of buffer existence
+    stream.debugEnabled = fs.existsSync(path.join(DEFAULT_BASE, 'buffer', `${id}.debug`));
+
     // Read buffer for active sessions — tokens + fill missing project name
     if (hasBuffer) {
       try {
@@ -202,9 +217,6 @@ function buildStreamsFromEvents(events: StreamEvent[], todayStartMs?: number): M
         if (ti > 0 || to > 0 || cr > 0 || cw > 0) {
           stream.tokens = { input: ti, output: to, cache_read: cr, cache_write: cw };
         }
-
-        // Check debug mode
-        stream.debugEnabled = fs.existsSync(path.join(DEFAULT_BASE, 'buffer', `${id}.debug`));
 
         // Fill missing project name from buffer context
         const bufProject = buf.context?.project_name;
@@ -362,6 +374,18 @@ export function useLiveTelemetry(rawBaseDir?: string): TelemetryState {
         }
       }
     }
+
+    // Also read pending batch events for active sessions
+    try {
+      const store = new SessionStore(baseDir, codec);
+      for (const f of fs.readdirSync(bufferDir).filter(f => f.endsWith('.batch'))) {
+        const sessionId = f.replace('.batch', '');
+        try {
+          const batchEvents = store.readBatchEvents(sessionId);
+          allEvents.push(...batchEvents);
+        } catch { /* skip unreadable batches */ }
+      }
+    } catch { /* buffer dir missing */ }
 
     // Sort by timestamp
     allEvents.sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
