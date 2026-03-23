@@ -38,4 +38,16 @@ describe('handleUserPromptSubmit', () => {
     const buffer = store.readBuffer('sess1');
     assert.equal(buffer.prompts_count, 2);
   });
+
+  it('sets last_prompt_ts to a valid ISO timestamp', () => {
+    const before = new Date().toISOString();
+    handleUserPromptSubmit({ session_id: 'sess1', prompt: 'hello' }, store);
+    const after = new Date().toISOString();
+    const buffer = store.readBuffer('sess1');
+    assert.ok(typeof buffer.last_prompt_ts === 'string', 'last_prompt_ts should be a string');
+    assert.ok(buffer.last_prompt_ts >= before, 'last_prompt_ts should be >= before');
+    assert.ok(buffer.last_prompt_ts <= after, 'last_prompt_ts should be <= after');
+    // Verify it's a valid ISO timestamp by parsing it
+    assert.ok(!isNaN(new Date(buffer.last_prompt_ts).getTime()), 'last_prompt_ts should be a valid date');
+  });
 });
