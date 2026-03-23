@@ -72,12 +72,27 @@ export function StreamDetail({ stream, width, height, scrollOffset, cursorIndex,
   const toolEntries = Object.entries(stream.toolCounts)
     .sort((a, b) => b[1] - a[1]);
 
-  // Merge events + debug entries into a unified timeline
+  // Merge events + debug entries into a unified timeline, deduplicating
   type TimelineItem = { ts: string; kind: 'event'; event: StreamEvent } | { ts: string; kind: 'debug'; entry: DebugEntry };
-  const timeline: TimelineItem[] = [
+
+  const seen = new Set<string>();
+  const dedupEvent = (items: TimelineItem[]): TimelineItem[] => {
+    const result: TimelineItem[] = [];
+    for (const item of items) {
+      const key = item.kind === 'event'
+        ? `e|${item.ts}|${item.event.event}|${item.event.tool || ''}|${(item.event as any).tool_use_id || ''}`
+        : `d|${item.ts}|${item.entry.type}|${item.entry.tool_use_id || ''}|${item.entry.tool || ''}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      result.push(item);
+    }
+    return result;
+  };
+
+  const timeline: TimelineItem[] = dedupEvent([
     ...stream.events.map(e => ({ ts: e.ts, kind: 'event' as const, event: e })),
     ...debugEntries.map(d => ({ ts: d.ts, kind: 'debug' as const, entry: d })),
-  ].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+  ]).sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
 
   const headerLines = 6;
   const footerLines = 2;

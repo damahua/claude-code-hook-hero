@@ -102,14 +102,20 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
   let statusColor: string;
   let nameColor: string;
 
+  // Compute idle duration for display
+  const lastEventTime = stream.events.length > 0
+    ? new Date(stream.events[stream.events.length - 1]!.ts).getTime()
+    : stream.startTime;
+  const idleDuration = Date.now() - lastEventTime;
+
   if (stream.done) {
     statusChar = '✓';
     statusColor = '#3fb950';
     nameColor = '#6e7681';
   } else if (stream.idle) {
     statusChar = '○';
-    statusColor = '#6e7681';
-    nameColor = '#6e7681';
+    statusColor = '#d29922'; // amber — still alive, just waiting
+    nameColor = '#8b949e';
   } else {
     statusChar = SPIN[frame]!;
     statusColor = '#58a6ff';
@@ -122,8 +128,8 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
   const paddingCount = Math.max(0, barWidth - recentEvents.length);
 
   const isCompact = collapsed || stream.idle || (stream.done && totalTools <= 0);
-  // CLI = single prompt (claude -p), interactive = multiple prompts
-  const isCli = stream.done && stream.promptCount <= 1;
+  // CLI = short single-prompt session (claude -p)
+  const isCli = stream.done && (stream.promptCount <= 1 || (elapsed < 30000 && stream.promptCount <= 2));
 
   return (
     <Box flexDirection="column">
@@ -146,6 +152,12 @@ function StreamRow({ stream, maxWidth, selected = false, collapsed = false }: St
             <Text color="#484f58"> · </Text>
             <Text color="#e6edf3" bold>{totalTools}</Text>
             <Text color="#6e7681"> ops</Text>
+          </>
+        )}
+        {stream.idle && !stream.done && (
+          <>
+            <Text color="#484f58"> · </Text>
+            <Text color="#d29922">idle {formatDuration(idleDuration)}</Text>
           </>
         )}
         {stream.failures > 0 && (
@@ -258,14 +270,18 @@ function computeGroupSummary(streams: AgentStream[]): GroupSummary {
 interface EventStreamProps {
   streams: AgentStream[];
   width?: number;
+  height?: number;
   selectedIndex?: number;
   expandedIds?: Set<string>;
   collapsedGroups?: Set<string>;
   selectedGroup?: string | null;
+  cursorIdx?: number;
+  navItemCount?: number;
+  scrollLine?: number;
   maxStreamsPerGroup?: number;
 }
 
-export function EventStream({ streams, width = 55, selectedIndex, expandedIds, collapsedGroups, selectedGroup, maxStreamsPerGroup = 10 }: EventStreamProps) {
+export function EventStream({ streams, width = 55, height, selectedIndex, expandedIds, collapsedGroups, selectedGroup, cursorIdx = 0, navItemCount = 0, scrollLine: externalScrollLine = 0, maxStreamsPerGroup = 10 }: EventStreamProps) {
   const sorted = sortStreams(streams);
 
   // Group by project
@@ -282,6 +298,69 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
   const activeCount = streams.filter(s => s.active && !s.idle).length;
   const idleCount = streams.filter(s => s.idle).length;
 
+  // Build a flat list of renderable items with line-height estimates
+  // so we can viewport-clip and keep the cursor visible.
+  type RenderItem = { kind: 'group'; project: string; group: { streams: AgentStream[]; globalIndices: number[] }; summary: GroupSummary; navIdx: number }
+    | { kind: 'stream'; stream: AgentStream; globalIdx: number; collapsed: boolean; navIdx: number; project: string };
+
+  const renderItems: RenderItem[] = [];
+  let navCounter = 0;
+  for (const [project, group] of groups) {
+    const isGroupCollapsed = collapsedGroups?.has(project) ?? false;
+    const summary = computeGroupSummary(group.streams);
+    renderItems.push({ kind: 'group', project, group, summary, navIdx: navCounter++ });
+    if (!isGroupCollapsed) {
+      group.streams.forEach((stream, j) => {
+        const isCollapsed = stream.done && !(expandedIds?.has(stream.id));
+        renderItems.push({ kind: 'stream', stream, globalIdx: group.globalIndices[j]!, collapsed: isCollapsed, navIdx: navCounter++, project });
+      });
+    }
+  }
+
+  // Estimate lines per item: groups=1, collapsed streams=1, expanded=3
+  const itemLines = renderItems.map(item => {
+    if (item.kind === 'group') return 1;
+    if (item.collapsed || item.stream.idle || (item.stream.done && Object.keys(item.stream.toolCounts).length === 0)) return 1;
+    const topTools = Object.entries(item.stream.toolCounts).length;
+    return 1 + 1 + (topTools > 0 ? 1 : 0); // header + bar + tool summary
+  });
+
+  // Viewport: if everything fits, render all items with no scrolling.
+  // Only apply viewport slicing when content exceeds available space.
+  const availableLines = Math.max(5, (height || 20) - 2);
+  const totalContentLines = itemLines.reduce((a, b) => a + b, 0);
+  const needsScroll = totalContentLines > availableLines;
+
+  let visibleItems: RenderItem[];
+  let hasMore = false;
+  let hasAbove = false;
+  let viewStart = 0;
+
+  if (!needsScroll) {
+    // Everything fits — render all, no scroll indicators
+    visibleItems = renderItems;
+  } else {
+    // Viewport slicing with external scroll state
+    const scrollLine = Math.max(0, externalScrollLine);
+    const lineOffset: number[] = [0];
+    for (let i = 0; i < itemLines.length; i++) {
+      lineOffset.push(lineOffset[i]! + itemLines[i]!);
+    }
+
+    while (viewStart < renderItems.length && lineOffset[viewStart + 1]! <= scrollLine) {
+      viewStart++;
+    }
+
+    visibleItems = [];
+    for (let i = viewStart; i < renderItems.length; i++) {
+      if (lineOffset[i]! - scrollLine + itemLines[i]! > availableLines) break;
+      visibleItems.push(renderItems[i]!);
+    }
+
+    hasMore = viewStart + visibleItems.length < renderItems.length;
+    hasAbove = viewStart > 0;
+  }
+
   return (
     <Box flexDirection="column" paddingX={1}>
       <Box>
@@ -294,61 +373,68 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
         <Text color="#30363d"> {'─'.repeat(Math.max(1, width - 36))}</Text>
       </Box>
 
+      {hasAbove && <Text color="#484f58">  ↑ {viewStart} more above</Text>}
+
       {sorted.length === 0 ? (
         <Box paddingY={1} paddingLeft={2}>
           <Text color="#484f58">listening for sessions…</Text>
         </Box>
       ) : (
         <Box flexDirection="column">
-          {Array.from(groups.entries()).map(([project, group]) => {
-            const isGroupCollapsed = collapsedGroups?.has(project) ?? false;
-            const isGroupSelected = selectedGroup === project;
-            const summary = computeGroupSummary(group.streams);
+          {visibleItems.map((item) => {
+            if (item.kind === 'group') {
+              const { project, summary, group } = item;
+              const isGroupCollapsed = collapsedGroups?.has(project) ?? false;
+              const isGroupSelected = selectedGroup === project;
 
-            // Collapsed group — single summary line
-            if (isGroupCollapsed) {
-              return (
-                <Box key={project}>
-                  <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '>' : ' '}</Text>
-                  <Text color="#d2a8ff" bold>[+] {project}</Text>
-                  <Text color="#484f58"> · </Text>
-                  <Text color="#6e7681">{summary.total} sess</Text>
-                  {summary.active > 0 && (
-                    <>
-                      <Text color="#484f58"> · </Text>
-                      <Text color="#58a6ff">{summary.active} active</Text>
-                    </>
-                  )}
-                  <Text color="#484f58"> · </Text>
-                  <Text color="#6e7681">{summary.totalOps} ops</Text>
-                  {summary.totalFailures > 0 && (
-                    <>
-                      <Text color="#484f58"> · </Text>
-                      <Text color="#f85149">{summary.totalFailures} err</Text>
-                    </>
-                  )}
-                  {summary.totalCost > 0 && (
-                    <>
-                      <Text color="#484f58"> · </Text>
-                      {summary.todayCost > 0 && summary.todayCost < summary.totalCost - 0.01 ? (
-                        <>
-                          <Text color="#d29922">{formatCost(summary.todayCost)}</Text>
-                          <Text color="#484f58">/</Text>
+              if (isGroupCollapsed) {
+                return (
+                  <Box key={`g-${project}`}>
+                    <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '>' : ' '}</Text>
+                    <Text color="#d2a8ff" bold>[+] {project}</Text>
+                    <Text color="#484f58"> · </Text>
+                    <Text color="#6e7681">{summary.total} sess</Text>
+                    {summary.active > 0 && (
+                      <>
+                        <Text color="#484f58"> · </Text>
+                        <Text color="#58a6ff">{summary.active} active</Text>
+                      </>
+                    )}
+                    {summary.idle > 0 && (
+                      <>
+                        <Text color="#484f58"> · </Text>
+                        <Text color="#d29922">{summary.idle} idle</Text>
+                      </>
+                    )}
+                    <Text color="#484f58"> · </Text>
+                    <Text color="#6e7681">{summary.totalOps} ops</Text>
+                    {summary.totalFailures > 0 && (
+                      <>
+                        <Text color="#484f58"> · </Text>
+                        <Text color="#f85149">{summary.totalFailures} err</Text>
+                      </>
+                    )}
+                    {summary.totalCost > 0 && (
+                      <>
+                        <Text color="#484f58"> · </Text>
+                        {summary.todayCost > 0 && summary.todayCost < summary.totalCost - 0.01 ? (
+                          <>
+                            <Text color="#d29922">{formatCost(summary.todayCost)}</Text>
+                            <Text color="#484f58">/</Text>
+                            <Text color="#d29922" bold>{formatCost(summary.totalCost)}</Text>
+                          </>
+                        ) : (
                           <Text color="#d29922" bold>{formatCost(summary.totalCost)}</Text>
-                        </>
-                      ) : (
-                        <Text color="#d29922" bold>{formatCost(summary.totalCost)}</Text>
-                      )}
-                    </>
-                  )}
-                </Box>
-              );
-            }
+                        )}
+                      </>
+                    )}
+                  </Box>
+                );
+              }
 
-            // Expanded group — show streams
-            return (
-              <Box key={project} flexDirection="column">
-                <Box>
+              // Expanded group header
+              return (
+                <Box key={`g-${project}`}>
                   <Text color={isGroupSelected ? '#58a6ff' : '#30363d'}>{isGroupSelected ? '>' : ' '}</Text>
                   <Text color="#d2a8ff" bold>[-] {project}</Text>
                   <Text color="#484f58"> · </Text>
@@ -361,20 +447,24 @@ export function EventStream({ streams, width = 55, selectedIndex, expandedIds, c
                   )}
                   <Text color="#30363d"> {'─'.repeat(Math.max(1, width - project.length - 25))}</Text>
                 </Box>
-                {group.streams.map((stream, j) => (
-                  <StreamRow
-                    key={stream.id}
-                    stream={stream}
-                    maxWidth={width}
-                    selected={selectedIndex === group.globalIndices[j]}
-                    collapsed={stream.done && !(expandedIds?.has(stream.id))}
-                  />
-                ))}
-              </Box>
+              );
+            }
+
+            // Stream row
+            return (
+              <StreamRow
+                key={item.stream.id}
+                stream={item.stream}
+                maxWidth={width}
+                selected={selectedIndex === item.globalIdx}
+                collapsed={item.collapsed}
+              />
             );
           })}
         </Box>
       )}
+
+      {hasMore && <Text color="#484f58">  ↓ {renderItems.length - viewStart - visibleItems.length} more below</Text>}
     </Box>
   );
 }
@@ -386,6 +476,47 @@ export function sortStreams(streams: AgentStream[]): AgentStream[] {
     if (aRank !== bRank) return aRank - bRank;
     return b.startTime - a.startTime;
   });
+}
+
+/** Compute scroll line to keep navIdx visible. Called from Dashboard on cursor change only. */
+export function computeScrollLine(
+  prevScroll: number,
+  navIdx: number,
+  navItems: { kind: string; stream?: AgentStream }[],
+  collapsedGroups: Set<string>,
+  expandedIds: Set<string>,
+  availableLines: number,
+  getProject: (s: AgentStream) => string,
+): number {
+  // Estimate line height per nav item
+  const heights: number[] = navItems.map(item => {
+    if (item.kind === 'group') return 1;
+    const s = item.stream!;
+    const collapsed = s.done && !expandedIds.has(s.id);
+    if (collapsed || s.idle || (s.done && Object.keys(s.toolCounts).length === 0)) return 1;
+    return 1 + 1 + (Object.keys(s.toolCounts).length > 0 ? 1 : 0);
+  });
+
+  // Cumulative offsets
+  const offsets = [0];
+  for (let i = 0; i < heights.length; i++) offsets.push(offsets[i]! + heights[i]!);
+  const totalLines = offsets[offsets.length - 1]!;
+
+  if (totalLines <= availableLines) return 0;
+
+  const cursorTop = navIdx < offsets.length ? offsets[navIdx]! : 0;
+  const cursorBottom = navIdx + 1 < offsets.length ? offsets[navIdx + 1]! : cursorTop + 1;
+
+  let scroll = prevScroll;
+  // Scroll down if cursor below viewport
+  if (cursorBottom > scroll + availableLines) {
+    scroll = cursorBottom - availableLines;
+  }
+  // Scroll up if cursor above viewport
+  if (cursorTop < scroll) {
+    scroll = cursorTop;
+  }
+  return Math.max(0, Math.min(scroll, totalLines - availableLines));
 }
 
 export type { AgentStream };

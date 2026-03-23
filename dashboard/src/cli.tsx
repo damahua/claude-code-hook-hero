@@ -41,9 +41,16 @@ function enterFullScreen() {
 
   process.stdout.write('\x1b[?1049h'); // alternate screen buffer
   process.stdout.write('\x1b[H');      // cursor home
+
+  // Disable mouse reporting — terminal mouse clicks send escape sequences
+  // that Ink misinterprets as keyboard input, causing unwanted scrolling.
+  process.stdout.write('\x1b[?1000l'); // disable basic mouse reporting
+  process.stdout.write('\x1b[?1002l'); // disable cell-motion mouse tracking
+  process.stdout.write('\x1b[?1003l'); // disable all-motion mouse tracking
+
   process.on('exit', () => {
     process.stdout.write = origWrite;  // restore original write
-    process.stdout.write('\x1b[?1049l'); // restore main screen
+    process.stdout.write('\x1b[?1049l'); // restore main screen (also restores mouse state)
   });
 }
 
