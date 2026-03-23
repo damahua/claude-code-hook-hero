@@ -125,8 +125,8 @@ describe('status-integration – full lifecycle start → prompt → stop → en
     assert.equal(status.today.tokens.input, 1000, 'after stop: tokens.input should be 1000');
     assert.equal(status.today.tokens.output, 500, 'after stop: tokens.output should be 500');
 
-    // sessions_total is still 0 (session not yet ended)
-    assert.equal(status.today.sessions_total, 0, 'after stop: sessions_total should be 0');
+    // sessions_total includes active sessions
+    assert.equal(status.today.sessions_total, 1, 'after stop: sessions_total should include active session');
 
     // Step 4: Session end
     handleSessionEnd(

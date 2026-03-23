@@ -424,13 +424,15 @@ describe('writeStatus – Task 4: active session cost from cost rates', () => {
   });
 
   it('sums completed and active session costs into today.cost_usd', () => {
-    // Write a completed session with known cost
+    // Write a completed session with real tokens (cost recalculated from tokens)
+    // 2000 input @ 0.003/1k = 0.006, 1000 output @ 0.015/1k = 0.015 → 0.021
     store.writeSession(today, 'completed1', {
       schema_version: '1.0',
       session_id: 'completed1',
+      context: { model: 'claude-sonnet-4-6' },
       tokens: {
-        input: 0, output: 0, cache_read: 0, cache_write: 0,
-        estimated_cost_usd: 0.05,
+        input: 2000, output: 1000, cache_read: 0, cache_write: 0,
+        estimated_cost_usd: null, // null — should be recalculated
       },
       tools: { total_calls: 0 },
       prompts: { count: 0 },
@@ -449,8 +451,9 @@ describe('writeStatus – Task 4: active session cost from cost rates', () => {
     writeStatus(store, MOCK_RATES);
     const status = readStatus(tmpDir);
 
+    const completedCost = (2000 / 1000) * 0.003 + (1000 / 1000) * 0.015; // 0.021
     const activeCost = (1000 / 1000) * 0.003; // 0.003
-    const totalExpected = Math.round((0.05 + activeCost) * 100) / 100;
+    const totalExpected = Math.round((completedCost + activeCost) * 100) / 100;
     assert.ok(
       Math.abs(status.today.cost_usd - totalExpected) < 0.001,
       `Expected total cost ~${totalExpected}, got ${status.today.cost_usd}`
